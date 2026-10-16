@@ -1031,6 +1031,16 @@ export interface components {
             updatedAt: string;
             /** @description Verzija članstva (za `PATCH /members/{membershipId}` i `PUT .../roles`). */
             version: components["schemas"]["Version"];
+            /** @description Kronološka povijest aktivnosti; razdoblje vrijedi od effectiveAt uključivo do sljedećeg događaja isključivo. */
+            statusHistory: {
+                /** @enum {string|null} */
+                oldStatus: "ACTIVE" | "INACTIVE" | null;
+                newStatus: components["schemas"]["MembershipStatus"];
+                /** Format: date-time */
+                effectiveAt: string;
+                /** Format: int64 */
+                actorUserId: number | null;
+            }[];
         };
         InviteMemberRequest: {
             email: components["schemas"]["Email"];
@@ -1057,6 +1067,7 @@ export interface components {
         /** @description Šalju se samo polja koja se mijenjaju. */
         UpdateMemberRequest: {
             expectedVersion: components["schemas"]["ExpectedVersion"];
+            email?: components["schemas"]["Email"];
             firstName?: string;
             lastName?: string;
             phone?: components["schemas"]["Phone"] | null;

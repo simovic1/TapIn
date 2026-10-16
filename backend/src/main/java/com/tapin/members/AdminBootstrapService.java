@@ -114,7 +114,7 @@ public class AdminBootstrapService {
 
     private void recordStatus(ClubMembership membership, MembershipStatus previous) {
         statusEvents.save(new MembershipStatusEvent(membership.getId(), previous, MembershipStatus.ACTIVE,
-                Instant.now(clock), null));
+                previous == null ? membership.getJoinedOn().atStartOfDay(membership.getClub().getTimeZone()).toInstant() : Instant.now(clock), null));
     }
 
     private Club theClub() {

@@ -3,8 +3,10 @@ import { RequireRole } from '../../lib/session/guards';
 import { ADMIN_ROLES, STAFF_ROLES } from '../../lib/session/roles';
 import { AdministrationPage } from './pages/AdministrationPage';
 import { MembersPage } from './pages/MembersPage';
+import { MemberDetailPage } from './pages/MemberDetailPage';
 
 export const membersRoutes: RouteObject[] = [
+  { path: 'clanovi/:membershipId', element: <RequireRole roles={STAFF_ROLES}><MemberDetailPage /></RequireRole> },
   {
     path: 'clanovi',
     element: (

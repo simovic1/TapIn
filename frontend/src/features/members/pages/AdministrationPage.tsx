@@ -1,11 +1,7 @@
-import { PlaceholderPage } from '../../../components/ui/PlaceholderPage';
+import { MembersPage } from './MembersPage';
 
 export function AdministrationPage() {
   return (
-    <PlaceholderPage
-      title="Administracija"
-      phase="Faza 1"
-      description="Upravljanje ulogama i statusom članstva."
-    />
+    <MembersPage administration />
   );
 }

@@ -93,6 +93,12 @@ class UserAccount {
     }
 
     Long getId() { return id; }
+    void updateContact(String email, String firstName, String lastName, String phone) {
+        this.email = email;
+        this.firstName = firstName;
+        this.lastName = lastName;
+        this.phone = phone;
+    }
     String getEmail() { return email; }
     String getFirstName() { return firstName; }
     String getLastName() { return lastName; }

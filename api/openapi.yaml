@@ -1781,6 +1781,7 @@ components:
           description: Verzija korisničkog profila (za `PATCH /me/profile`).
     UpdateOwnProfileRequest:
       type: object
+      additionalProperties: false
       required: [expectedVersion, phone]
       properties:
         expectedVersion: { $ref: '#/components/schemas/ExpectedVersion' }
@@ -1820,7 +1821,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/MemberSummary'
         - type: object
-          required: [phone, currentBeltAwardedOn, createdAt, updatedAt, version]
+          required: [phone, currentBeltAwardedOn, createdAt, updatedAt, version, statusHistory]
           properties:
             phone:
               oneOf: [{ $ref: '#/components/schemas/Phone' }, { type: 'null' }]
@@ -1834,6 +1835,17 @@ components:
             version:
               $ref: '#/components/schemas/Version'
               description: Verzija članstva (za `PATCH /members/{membershipId}` i `PUT .../roles`).
+            statusHistory:
+              type: array
+              description: Kronološka povijest aktivnosti; razdoblje vrijedi od effectiveAt uključivo do sljedećeg događaja isključivo.
+              items:
+                type: object
+                required: [oldStatus, newStatus, effectiveAt, actorUserId]
+                properties:
+                  oldStatus: { type: [string, 'null'], enum: [ACTIVE, INACTIVE, null] }
+                  newStatus: { $ref: '#/components/schemas/MembershipStatus' }
+                  effectiveAt: { type: string, format: date-time }
+                  actorUserId: { type: [integer, 'null'], format: int64 }
     InviteMemberRequest:
       type: object
       required: [email, firstName, lastName, roles]
@@ -1863,11 +1875,13 @@ components:
         notificationStatus: { $ref: '#/components/schemas/NotificationStatus' }
     UpdateMemberRequest:
       type: object
+      additionalProperties: false
       required: [expectedVersion]
       minProperties: 2
       description: Šalju se samo polja koja se mijenjaju.
       properties:
         expectedVersion: { $ref: '#/components/schemas/ExpectedVersion' }
+        email: { $ref: '#/components/schemas/Email' }
         firstName: { type: string, minLength: 1, maxLength: 100 }
         lastName: { type: string, minLength: 1, maxLength: 100 }
         phone: { oneOf: [{ $ref: '#/components/schemas/Phone' }, { type: 'null' }] }

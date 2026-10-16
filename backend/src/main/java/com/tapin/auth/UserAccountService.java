@@ -18,10 +18,41 @@ public class UserAccountService {
 
     private final UserAccountRepository users;
     private final PasswordEncoder passwordEncoder;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
-    UserAccountService(UserAccountRepository users, PasswordEncoder passwordEncoder) {
+    UserAccountService(UserAccountRepository users, PasswordEncoder passwordEncoder, org.springframework.jdbc.core.JdbcTemplate jdbc) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
+        this.jdbc = jdbc;
+    }
+
+    @Transactional
+    public void updateContact(long userId, String email, String firstName, String lastName, String phone) {
+        jdbc.queryForObject("SELECT id FROM users WHERE id=? FOR UPDATE", Long.class, userId);
+        UserAccount user = users.findById(userId).orElseThrow(() -> ApiException.notFound("Korisnik ne postoji."));
+        users.findByEmailIgnoreCase(email).filter(other -> !other.getId().equals(userId)).ifPresent(other -> { throw duplicateEmail(); });
+        if (!user.getEmail().equalsIgnoreCase(email)) {
+            // Links delivered to the old address must not grant access to the changed account.
+            jdbc.update("UPDATE invitations SET revoked_at=now() WHERE user_id=? AND accepted_at IS NULL AND revoked_at IS NULL", userId);
+            jdbc.update("UPDATE password_reset_tokens SET revoked_at=now() WHERE user_id=? AND consumed_at IS NULL AND revoked_at IS NULL", userId);
+        }
+        user.updateContact(email, firstName, lastName, phone);
+        try { users.saveAndFlush(user); }
+        catch (DataIntegrityViolationException ex) { throw duplicateEmail(); }
+    }
+
+    @Transactional
+    public void updateOwnPhone(long userId, long expectedVersion, String phone) {
+        // Same lock order as member administration; changing a phone invalidates the member editor's version too.
+        jdbc.execute("SELECT pg_advisory_xact_lock(" + 0x7A91_0001L + ")");
+        jdbc.queryForObject("SELECT id FROM users WHERE id=? FOR UPDATE", Long.class, userId);
+        UserAccount user = users.findById(userId).orElseThrow(() -> ApiException.notFound("Korisnik ne postoji."));
+        if (user.getVersion() != expectedVersion) throw ApiException.versionConflict(findProfile(userId).orElseThrow());
+        if (phone != null && !phone.matches("^[+0-9 ()/-]{6,32}$"))
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Telefon mora sadržavati 6–32 dopuštena znaka.");
+        user.updateContact(user.getEmail(), user.getFirstName(), user.getLastName(), phone);
+        users.saveAndFlush(user);
+        jdbc.update("UPDATE club_memberships SET version=version+1, updated_at=now() WHERE user_id=?", userId);
     }
 
     @Transactional(readOnly = true)
@@ -76,6 +107,13 @@ public class UserAccountService {
         users.findAllById(userIds).forEach(u -> result.put(u.getId(), new UserProfile(u.getId(), u.getEmail(),
                 u.getFirstName(), u.getLastName(), u.getPhone(), u.getAccountStatus(), u.getVersion())));
         return result;
+    }
+
+    /** Locks before loading contact data so links cannot be issued to a concurrently replaced address. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public Optional<UserProfile> lockProfile(long userId) {
+        jdbc.queryForObject("SELECT id FROM users WHERE id=? FOR UPDATE", Long.class, userId);
+        return findProfile(userId);
     }
 
     public record UserProfile(long userId, String email, String firstName, String lastName, String phone,

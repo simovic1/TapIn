@@ -72,10 +72,14 @@ public class MemberInvitationService {
         rolePolicy.assertCanAssign(actor, command.roles());
         Club club = theClub();
         LocalDate joinedOn = command.joinedOn() != null ? command.joinedOn() : LocalDate.now(clock.withZone(club.getTimeZone()));
+        if (joinedOn.isAfter(LocalDate.now(clock.withZone(club.getTimeZone())))) {
+            throw new com.tapin.shared.error.ApiException(com.tapin.shared.error.ErrorCode.VALIDATION_FAILED,
+                    "Datum učlanjenja ne smije biti u budućnosti.");
+        }
 
         UserRef user = userAccounts.createInvitedUser(command.email(), command.firstName(), command.lastName());
         ClubMembership membership = memberships.save(ClubMembership.active(club, user.userId(), joinedOn, command.roles()));
-        statusEvents.save(new MembershipStatusEvent(membership.getId(), null, MembershipStatus.ACTIVE, clock.instant(),
+        statusEvents.save(new MembershipStatusEvent(membership.getId(), null, MembershipStatus.ACTIVE, joinedOn.atStartOfDay(club.getTimeZone()).toInstant(),
                 actor.userId()));
 
         IssuedInvitation issued = invitations.issue(club.getId(), user.userId(), actor.userId());
@@ -89,7 +93,7 @@ public class MemberInvitationService {
     public InvitationResult resend(AuthenticatedUser actor, long membershipId) {
         ClubMembership membership = memberships.findById(membershipId)
                 .orElseThrow(() -> ApiException.notFound("Član ne postoji."));
-        UserProfile user = userAccounts.findProfile(membership.getUserId())
+        UserProfile user = userAccounts.lockProfile(membership.getUserId())
                 .orElseThrow(() -> ApiException.notFound("Član ne postoji."));
         if (user.accountStatus() != AccountStatus.INVITED) {
             throw ApiException.businessRule("Račun je već aktiviran; pozivnica nije potrebna.");

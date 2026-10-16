@@ -33,7 +33,9 @@ class PasswordResetService {
         users.findByEmailIgnoreCase(email.strip()).filter(u -> u.getAccountStatus() == AccountStatus.ACTIVE)
                 .ifPresent(user -> {
                     // Serialize issuance and confirmation for this account, including concurrent re-sends.
-                    jdbc.queryForObject("SELECT id FROM users WHERE id = ? FOR UPDATE", Long.class, user.getId());
+                    var locked = jdbc.queryForMap("SELECT email, first_name, account_status FROM users WHERE id = ? FOR UPDATE", user.getId());
+                    if (!"ACTIVE".equals(locked.get("account_status"))
+                            || !email.strip().equalsIgnoreCase((String) locked.get("email"))) return;
                     var now = clock.instant();
                     jdbc.update("UPDATE password_reset_tokens SET revoked_at = ? WHERE user_id = ? "
                             + "AND consumed_at IS NULL AND revoked_at IS NULL", Timestamp.from(now), user.getId());
@@ -42,8 +44,8 @@ class PasswordResetService {
                     Long id = jdbc.queryForObject("INSERT INTO password_reset_tokens "
                                     + "(user_id, token_hash, created_at, expires_at) VALUES (?, ?, ?, ?) RETURNING id",
                             Long.class, user.getId(), InvitationTokens.hash(token), Timestamp.from(now), Timestamp.from(expires));
-                    outbox.enqueue(OutboxMessage.of(EmailEventType.PASSWORD_RESET, user.getId(), user.getEmail(),
-                            Map.of("firstName", user.getFirstName(), "resetUrl", appUrl.link("/nova-lozinka#" + token),
+                    outbox.enqueue(OutboxMessage.of(EmailEventType.PASSWORD_RESET, user.getId(), (String) locked.get("email"),
+                            Map.of("firstName", locked.get("first_name"), "resetUrl", appUrl.link("/nova-lozinka#" + token),
                                     "expiresAt", expires.atZone(java.time.ZoneId.of("Europe/Zagreb")).toString()),
                             "PASSWORD_RESET:token-" + id).withSecret());
                 });

@@ -13,6 +13,8 @@ const MESSAGES: Partial<Record<ErrorCode, string>> = {
   VERSION_CONFLICT: 'Podatak je u međuvremenu izmijenjen. Osvježite prikaz i pokušajte ponovno.',
   RATE_LIMITED: 'Previše pokušaja. Pričekajte nekoliko minuta i pokušajte ponovno.',
   PASSWORD_RESET_TOKEN_INVALID: 'Poveznica nije valjana ili je istekla. Zatražite novu promjenu lozinke.',
+  LAST_ADMIN_REMOVAL: 'Zadnji aktivni administrator ne može izgubiti pristup. Najprije dodijelite administratorsku ulogu drugom aktivnom korisniku.',
+  DUPLICATE_RESOURCE: 'Korisnik s tom e-mail adresom već postoji.',
   INTERNAL_ERROR: 'Došlo je do neočekivane pogreške na poslužitelju.',
 };
 

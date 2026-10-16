@@ -27,7 +27,7 @@ sh scripts/check-migrations.sh
 Redoslijed slijedi ovisnosti tablica i backlog (§16). Brojevi su rezervirani; ako se plan promijeni, ažurira se
 ova tablica u istom PR-u. (Outbox je zbog BJJ-05 dobio V004, pa su planirane migracije V005–V009 pomaknute za
 jedan; komentar u `V001` ostaje izvorni jer se primijenjena migracija ne mijenja.) BJJ-08 isporučuje reset
-lozinke kao V006; još neisporučene domenske migracije sada su rezervirane kao V007–V010.
+lozinke kao V006; V007–V009 isporučili su BJJ-13/17/19; dopuna početne aktivnosti članstva (BJJ-11) je V010, a pojasevi su rezervirani kao V011.
 
 | Verzija | Datoteka | Modul | Sadržaj | Faza |
 |---|---|---|---|---|
@@ -40,7 +40,8 @@ lozinke kao V006; još neisporučene domenske migracije sada su rezervirane kao 
 | V007 | `V007__scheduling_recurring_schedules_sessions.sql` | scheduling | `recurring_schedules` (+ seed uto/čet 18:30–20:00), `training_sessions` (`uk_training_sessions_schedule_occurrence`, `ex_training_sessions_no_overlap`), `session_coaches`, `training_session_events`; FK `email_outbox.session_id` → `training_sessions` – BJJ-13 | 2 ✅ |
 | V008 | `V008__registrations_training_registrations.sql` | registrations | `training_registrations` (`uk_training_registrations_session_membership`, FK na isti klub), `registration_events` – BJJ-17 | 2 ✅ |
 | V009 | `V009__attendance_attendances_audit.sql` | attendance | `training_attendances` (UNMARKED kao redak – verzija nikad ne kreće ispočetka), `attendance_audit_logs` (append-only trigger) – BJJ-19 | 3 ✅ |
-| V010 | `V010__belts_belt_periods_audit.sql` | belts | `member_belt_periods`, `belt_period_audit_logs` | 4 |
+| V010 | `V010__members_initial_activity_history.sql` | members | Početno stanje aktivnosti postojećih članstava – BJJ-11 (prije V007, preimenovano jer su V007–V009 već na masteru) | 1 ✅ |
+| V011 | `V011__belts_belt_periods_audit.sql` | belts | `member_belt_periods`, `belt_period_audit_logs` | 4 |
 | R__ | `R__reporting_*.sql` | reporting | Read-only pogledi za statistiku | 6 |
 
 Admin seed (prvi administrator) **nije** u migraciji jer zahtijeva tajnu. Radi ga `AdminBootstrapService`
