@@ -69,7 +69,7 @@ public class RegistrationService {
     public MyRegistrationResult register(AuthenticatedUser actor, long trainingId) {
         long membershipId = actor.membershipId();
         lock.acquire(trainingId, membershipId);
-        SessionRef session = trainings.lockForRegistration(trainingId);
+        SessionRef session = trainings.lockForParticipation(trainingId);
         Registration existing = registrations.find(trainingId, membershipId).orElse(null);
         String attendanceStatus = attendanceOf(trainingId, membershipId);
         if (existing != null && existing.status() == RegistrationStatus.REGISTERED) {
@@ -114,7 +114,7 @@ public class RegistrationService {
     public MyRegistrationResult cancel(AuthenticatedUser actor, long trainingId) {
         long membershipId = actor.membershipId();
         lock.acquire(trainingId, membershipId);
-        SessionRef session = trainings.lockForRegistration(trainingId);
+        SessionRef session = trainings.lockForParticipation(trainingId);
         Registration existing = registrations.find(trainingId, membershipId)
                 .orElseThrow(() -> ApiException.notFound("Niste prijavljeni na ovaj trening."));
         String attendanceStatus = attendanceOf(trainingId, membershipId);
@@ -130,6 +130,12 @@ public class RegistrationService {
         long eventId = registrations.insertEvent(existing.id(), "CANCELLED", actor.userId(), "SELF", now);
         EnqueueResult queued = notify(EmailEventType.REGISTRATION_CANCELLED, me(membershipId), session, eventId);
         return result(registrations.find(trainingId, membershipId).orElseThrow(), attendanceStatus, true, queued);
+    }
+
+    /** Registration status of every member with a registration for the session (roster, bulk "absent"). */
+    @Transactional(readOnly = true)
+    public Map<Long, RegistrationStatus> registrationsOf(long trainingId) {
+        return registrations.statusesBySession(trainingId);
     }
 
     /** Current registration status of a member, for the attendance module (roster, bulk "absent"). */

@@ -139,12 +139,13 @@ public class TrainingService {
     }
 
     /**
-     * Reads the session with a shared row lock for the caller's transaction (registrations). A concurrent cancel or
-     * move waits until the caller commits, and vice versa, so a registration can never slip in next to a
-     * cancellation without being seen by it (the cancel e-mail goes to everyone registered at its commit).
+     * Reads the session with a shared row lock for the caller's transaction (registrations, attendance). A
+     * concurrent cancel or move waits until the caller commits, and vice versa, so a registration or attendance
+     * write can never slip in next to a cancellation without being seen by it (the cancel e-mail goes to everyone
+     * registered at its commit; attendance is never recorded on a session cancelled meanwhile).
      */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
-    public SessionRef lockForRegistration(long trainingId) {
+    public SessionRef lockForParticipation(long trainingId) {
         TrainingSession s = sessions.findForShare(trainingId)
                 .orElseThrow(() -> ApiException.notFound("Trening ne postoji."));
         return new SessionRef(s.getId(), s.getStatus(), s.getStartAt(), s.getEndAt(),

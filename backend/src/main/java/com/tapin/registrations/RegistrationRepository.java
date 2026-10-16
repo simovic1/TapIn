@@ -98,6 +98,16 @@ class RegistrationRepository {
         return counts;
     }
 
+    Map<Long, RegistrationStatus> statusesBySession(long trainingId) {
+        Map<Long, RegistrationStatus> statuses = new HashMap<>();
+        jdbc.query("SELECT membership_id, status FROM training_registrations WHERE session_id = :session",
+                new MapSqlParameterSource("session", trainingId),
+                (ResultSet rs) -> {
+                    statuses.put(rs.getLong("membership_id"), RegistrationStatus.valueOf(rs.getString("status")));
+                });
+        return statuses;
+    }
+
     Map<Long, RegistrationStatus> statusesOf(long membershipId, Collection<Long> trainingIds) {
         Map<Long, RegistrationStatus> statuses = new HashMap<>();
         if (!trainingIds.isEmpty()) {

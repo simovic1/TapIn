@@ -663,17 +663,21 @@ export interface paths {
         /**
          * Postavi PRESENT ili ABSENT
          * @description `expectedVersion` mora odgovarati `attendanceVersion` iz rostera (za `UNMARKED` je to vrijednost iz
-         *     rostera, u pravilu `0`). Neusklađenost → `409 VERSION_CONFLICT` s trenutačnim retkom u `currentState` (AC-09).
-         *     Isti status kao trenutačni → `200`, `changed=false`, bez audita i e-maila (AC-10).
-         *     Stvarna promjena → audit zapis + `notificationStatus=QUEUED`.
-         *     Neaktivan član na budućem/novom terminu → `422 MEMBERSHIP_INACTIVE`; otkazan termin → `422 TRAINING_CANCELLED`.
+         *     rostera, u pravilu `0`). Neusklađenost → `409 VERSION_CONFLICT` s trenutačnim retkom u `currentState` (AC-09);
+         *     vrijedi i za prvi upis kad dva trenera istodobno pišu za istog člana.
+         *     Isti status kao trenutačni → `200`, `changed=false`, bez audita i e-maila (AC-10), i uz staru verziju.
+         *     Stvarna promjena → audit zapis (autor, prije/poslije, UTC vrijeme, izvor, napomena) + `notificationStatus=QUEUED`,
+         *     sve u jednoj transakciji. Član ne mora biti prijavljen (walk-in, AC-06) ili je mogao otkazati prijavu.
+         *     Neaktivan član na terminu koji još nije završio → `422 MEMBERSHIP_INACTIVE` (povijesni unos je dopušten);
+         *     otkazan termin → `422 TRAINING_CANCELLED`; nepostojeći član ili termin → `404`.
          */
         put: operations["setAttendance"];
         post?: never;
         /**
          * Povratak na UNMARKED (iznimni slučaj)
-         * @description Uklanja zapis prisutnosti uz audit (`newStatus=UNMARKED`); član ponovno može sam otkazati prijavu.
-         *     Već `UNMARKED` → `200`, `changed=false`.
+         * @description Vraća prisutnost na `UNMARKED` uz audit (`newStatus=UNMARKED`, `source=CORRECTION`); član ponovno može sam
+         *     otkazati prijavu. Zapis se pri tome ne briše nego mu `version` i dalje raste, pa zastarjeli zahtjev (npr. s
+         *     `expectedVersion=0`) ni nakon povratka ne može uspjeti. Već `UNMARKED` → `200`, `changed=false`.
          */
         delete: operations["resetAttendance"];
         options?: never;

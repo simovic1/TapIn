@@ -39,7 +39,7 @@ lozinke kao V006; još neisporučene domenske migracije sada su rezervirane kao 
 | V006 | `V006__auth_password_reset_tokens.sql` | auth | `password_reset_tokens` (odvojeno od pozivnica) | 1 ✅ |
 | V007 | `V007__scheduling_recurring_schedules_sessions.sql` | scheduling | `recurring_schedules` (+ seed uto/čet 18:30–20:00), `training_sessions` (`uk_training_sessions_schedule_occurrence`, `ex_training_sessions_no_overlap`), `session_coaches`, `training_session_events`; FK `email_outbox.session_id` → `training_sessions` – BJJ-13 | 2 ✅ |
 | V008 | `V008__registrations_training_registrations.sql` | registrations | `training_registrations` (`uk_training_registrations_session_membership`, FK na isti klub), `registration_events` – BJJ-17 | 2 ✅ |
-| V009 | `V009__attendance_attendances_audit.sql` | attendance | `training_attendances`, `attendance_audit_logs` | 3 |
+| V009 | `V009__attendance_attendances_audit.sql` | attendance | `training_attendances` (UNMARKED kao redak – verzija nikad ne kreće ispočetka), `attendance_audit_logs` (append-only trigger) – BJJ-19 | 3 ✅ |
 | V010 | `V010__belts_belt_periods_audit.sql` | belts | `member_belt_periods`, `belt_period_audit_logs` | 4 |
 | R__ | `R__reporting_*.sql` | reporting | Read-only pogledi za statistiku | 6 |
 
