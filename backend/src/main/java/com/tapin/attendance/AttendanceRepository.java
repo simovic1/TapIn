@@ -125,6 +125,12 @@ class AttendanceRepository {
         return result;
     }
 
+    List<Long> presentSessionIds(long membershipId) {
+        return jdbc.queryForList("SELECT session_id FROM training_attendances "
+                + "WHERE membership_id = :membership AND status = 'PRESENT'",
+                new MapSqlParameterSource("membership", membershipId), Long.class);
+    }
+
     private static MapSqlParameterSource auditParams(long trainingId, Long membershipId) {
         return new MapSqlParameterSource("session", trainingId).addValue("membership", membershipId);
     }

@@ -4,7 +4,8 @@
  *   <li>Tablice (vlasništvo, jedini modul koji u njih piše): member_belt_periods, belt_period_audit_logs</li>
  *   <li>API: /api/v1/members/{id}/belts/**, /api/v1/me/belts</li>
  *   <li>Frontend: features/belts</li>
- *   <li>Smije ovisiti o: shared, members</li>
+ *   <li>Smije ovisiti o: shared, auth, members, scheduling (datumi održanih termina), attendance (PRESENT dolasci)</li>
+ *   <li>SPI: implementira {@link com.tapin.members.CurrentBeltLookup} (trenutačni pojas za imenik i prozivku)</li>
  * </ul>
  * Pravila vlasništva i imenovanja: {@code docs/architecture/modules.md}.
  */

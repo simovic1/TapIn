@@ -404,7 +404,10 @@ export interface paths {
          * @description `effectiveFromDate` se izračunava iz `awardedOn` i `promotionTiming`: `AFTER_TRAINING` → sljedeći dan,
          *     `BEFORE_TRAINING` → isti dan. Za povijesni unos bez poznatog datuma dodjele (`awardedOn: null`) obvezan je
          *     `effectiveFromDate`. Isti efektivni datum kao postojeći → `409 BELT_DUPLICATE_EFFECTIVE_DATE`;
-         *     neispravan kronološki slijed ili niži pojas → `422 BELT_CHRONOLOGY_INVALID`. Polaznik → `403` (AC-28).
+         *     neispravan kronološki slijed → `422 BELT_CHRONOLOGY_INVALID`: poredano po `effectiveFromDate` svaki je pojas
+         *     strogo viši od prethodnog, a poznati datumi dodjele idu istim redom (raniji niži pojas smije se naknadno
+         *     unijeti). Datum dodjele u budućnosti → `400`. Istodobni unosi za istog člana serijaliziraju se i cijela se
+         *     povijest ponovno provjerava. Polaznik → `403` (AC-28).
          */
         post: operations["createBeltPeriod"];
         delete?: never;
@@ -428,8 +431,11 @@ export interface paths {
         head?: never;
         /**
          * Ispravak pojasa ili datuma uz audit
-         * @description Kontrolirana korekcija s `expectedVersion`; nastaje zapis u auditu pojaseva. Treninzi se ponovno raspodjeljuju
-         *     (AC-26). Istodobna izmjena → `409 VERSION_CONFLICT` sa svježim stanjem (AC-30). Brisanje nije dio MVP-a.
+         * @description Kontrolirana korekcija s `expectedVersion`; nastaje zapis u auditu pojaseva (staro/novo stanje i `reason`).
+         *     Izostavljeno polje ostaje nepromijenjeno, `null` briše `awardedOn`/`awardedByUserId`/`note`. Ako se mijenja
+         *     samo `awardedOn`, zadržava se dosadašnji način (prije/nakon treninga). Ista pravila kronologije kao kod unosa.
+         *     Bez stvarne promjene ne nastaje audit. Treninzi se ponovno raspodjeljuju (AC-26). Istodobna izmjena →
+         *     `409 VERSION_CONFLICT` sa svježim razdobljem u `currentState` (AC-30). Brisanje nije dio MVP-a.
          */
         patch: operations["correctBeltPeriod"];
         trace?: never;

@@ -126,6 +126,23 @@ public class TrainingService {
         return views(viewer, sessions.findStartingBetween(start, end, filter));
     }
 
+    /**
+     * Club-local date (Europe/Zagreb) of each session that is HELD; other ids (scheduled, cancelled, unknown) are
+     * absent. The basis of training counts per belt and of statistics (spec §9.3): cancelled sessions never count.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, LocalDate> heldLocalDates(Collection<Long> trainingIds) {
+        Map<Long, LocalDate> result = new HashMap<>();
+        if (trainingIds.isEmpty()) {
+            return result;
+        }
+        ZoneId zone = directory.theClub().timeZone();
+        sessions.findAllById(trainingIds).stream()
+                .filter(s -> s.getStatus() == TrainingStatus.HELD)
+                .forEach(s -> result.put(s.getId(), LocalDate.ofInstant(s.getStartAt(), zone)));
+        return result;
+    }
+
     /** Who can be assigned as a coach (active TRAINER/ADMIN memberships). */
     @Transactional(readOnly = true)
     public List<CoachView> coachCandidates() {

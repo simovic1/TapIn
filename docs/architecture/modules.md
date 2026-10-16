@@ -28,6 +28,9 @@ u CODEOWNERS-u i u ovoj tablici.
    `registrations.ParticipationLock` za (termin, član) – istu bravu drži i samostalna prijava/otkaz člana – pa se
    otkaz prijave i evidencija istog člana nikad ne isprepliću (AC-05). `registrations` stanje prisutnosti čita kroz
    SPI `AttendanceStatusLookup` koji implementira `attendance`.
+   `belts` broji treninge po pojasu iz `AttendanceService.presentSessionIds` i `TrainingService.heldLocalDates`
+   (izračun pri svakom čitanju, bez pohranjenih brojača); trenutačni pojas za imenik i prozivku daje kroz SPI
+   `members.CurrentBeltLookup`, pa `members`/`attendance` ne ovise o `belts`.
 3. **`reporting` ne posjeduje tablice** – koristi read-only SQL upite i repeatable poglede (`R__reporting_*`).
    Brojači se ne pohranjuju kao poslovna istina (§9.3).
 4. **`notifications`**: ostali moduli upisuju događaj u outbox *u istoj transakciji* kao poslovnu promjenu, preko

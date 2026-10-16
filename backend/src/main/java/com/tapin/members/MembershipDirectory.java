@@ -22,11 +22,23 @@ public class MembershipDirectory {
     private final ClubRepository clubs;
     private final ClubMembershipRepository memberships;
     private final UserAccountService userAccounts;
+    private final List<CurrentBeltLookup> belts;
 
-    MembershipDirectory(ClubRepository clubs, ClubMembershipRepository memberships, UserAccountService userAccounts) {
+    MembershipDirectory(ClubRepository clubs, ClubMembershipRepository memberships, UserAccountService userAccounts,
+                        List<CurrentBeltLookup> belts) {
         this.clubs = clubs;
         this.memberships = memberships;
         this.userAccounts = userAccounts;
+        this.belts = belts;
+    }
+
+    /** Derived current belt per membership ({@code UNKNOWN} without belt history), e.g. for the roster. */
+    @Transactional(readOnly = true)
+    public Map<Long, String> currentBelts(Collection<Long> membershipIds) {
+        Map<Long, String> result = new LinkedHashMap<>();
+        membershipIds.forEach(id -> result.put(id, "UNKNOWN"));
+        belts.forEach(lookup -> lookup.currentBelts(membershipIds).forEach((id, b) -> result.put(id, b.belt())));
+        return result;
     }
 
     public record ClubRef(long clubId, String name, ZoneId timeZone) {

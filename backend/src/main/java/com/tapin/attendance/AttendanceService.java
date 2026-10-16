@@ -73,7 +73,7 @@ public class AttendanceService {
 
     // ------------------------------------------------------------------ API shapes
 
-    /** {@code RosterEntry}; {@code currentBelt} stays UNKNOWN until the belts module exists. */
+    /** {@code RosterEntry}; {@code currentBelt} is derived by the belts module ({@code UNKNOWN} without history). */
     public record RosterEntry(long membershipId, long userId, String firstName, String lastName, String currentBelt,
                               RegistrationStatus registrationStatus, AttendanceStatus attendanceStatus,
                               long attendanceVersion, Instant attendanceUpdatedAt, Long attendanceUpdatedByUserId) {
@@ -116,8 +116,9 @@ public class AttendanceService {
         Set<Long> ids = new LinkedHashSet<>(registered.keySet());
         ids.addAll(recorded.keySet());
         Map<Long, MemberRef> members = directory.findAll(ids);
+        Map<Long, String> beltsOf = directory.currentBelts(ids);
         List<RosterEntry> entries = ids.stream().filter(members::containsKey)
-                .map(id -> entry(members.get(id), registered.get(id), recorded.get(id)))
+                .map(id -> entry(members.get(id), beltsOf.get(id), registered.get(id), recorded.get(id)))
                 .sorted(Comparator.comparing(RosterEntry::lastName, String.CASE_INSENSITIVE_ORDER)
                         .thenComparing(RosterEntry::firstName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
@@ -130,6 +131,12 @@ public class AttendanceService {
             unmarked += active && e.attendanceStatus() == AttendanceStatus.UNMARKED ? 1 : 0;
         }
         return new Roster(training, new RosterCounts(registeredCount, present, absent, unmarked), entries);
+    }
+
+    /** Sessions where the member is PRESENT (latest value; corrections are reflected immediately). */
+    @Transactional(readOnly = true)
+    public List<Long> presentSessionIds(long membershipId) {
+        return attendances.presentSessionIds(membershipId);
     }
 
     @Transactional(readOnly = true)
@@ -285,7 +292,7 @@ public class AttendanceService {
     }
 
     private ApiException conflict(long trainingId, MemberRef member, Attendance current) {
-        return ApiException.versionConflict(entry(member, registrations.statusOf(trainingId, member.membershipId()),
+        return ApiException.versionConflict(entry(member, directory.currentBelts(List.of(member.membershipId())).get(member.membershipId()), registrations.statusOf(trainingId, member.membershipId()),
                 current));
     }
 
@@ -297,8 +304,8 @@ public class AttendanceService {
         };
     }
 
-    private static RosterEntry entry(MemberRef m, RegistrationStatus registration, Attendance a) {
-        return new RosterEntry(m.membershipId(), m.userId(), m.firstName(), m.lastName(), "UNKNOWN", registration,
+    private static RosterEntry entry(MemberRef m, String belt, RegistrationStatus registration, Attendance a) {
+        return new RosterEntry(m.membershipId(), m.userId(), m.firstName(), m.lastName(), belt != null ? belt : "UNKNOWN", registration,
                 a != null ? a.status() : AttendanceStatus.UNMARKED, a != null ? a.version() : 0,
                 a != null ? a.updatedAt() : null, a != null ? a.updatedByUserId() : null);
     }

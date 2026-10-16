@@ -31,9 +31,11 @@ public class MemberDirectoryService {
     private final UserAccountService users;
     private final Validator validator;
     private final Clock clock;
+    private final List<CurrentBeltLookup> belts;
 
-    MemberDirectoryService(JdbcTemplate jdbc, UserAccountService users, Validator validator, Clock clock) {
-        this.jdbc = jdbc; this.users = users; this.validator = validator; this.clock = clock;
+    MemberDirectoryService(JdbcTemplate jdbc, UserAccountService users, Validator validator, Clock clock,
+                           List<CurrentBeltLookup> belts) {
+        this.jdbc = jdbc; this.users = users; this.validator = validator; this.clock = clock; this.belts = belts;
     }
 
     public record StatusEvent(String oldStatus, String newStatus, Instant effectiveAt, Long actorUserId) {}
@@ -54,12 +56,12 @@ public class MemberDirectoryService {
         if (!sort.matches("(lastName|firstName|joinedOn|lastPresentOn),(asc|desc)")) throw ProfilePatch.invalid("Nepodržano sortiranje.");
         if (belt != null && !Set.of("WHITE", "BLUE", "PURPLE", "BROWN", "BLACK", "UNKNOWN").contains(belt))
             throw ProfilePatch.invalid("Nepoznat pojas.");
-        // Belt/attendance modules have not supplied derived data yet; do not invent it.
+        // The current belt is derived by the belts module (CurrentBeltLookup); attendance data is not supplied yet.
         String filter = " WHERE (strpos(lower(u.first_name || ' ' || u.last_name), lower(?)) > 0 OR strpos(lower(u.email), lower(?)) > 0)";
         List<Object> args = new ArrayList<>(List.of(query.strip(), query.strip()));
         if (status != null) { filter += " AND m.status = ?"; args.add(status.name()); }
         if (role != null) { filter += " AND EXISTS (SELECT 1 FROM membership_roles r WHERE r.membership_id=m.id AND r.role=?)"; args.add(role.name()); }
-        if (belt != null && !belt.equals("UNKNOWN")) filter += " AND false";
+        if (belt != null) filter += beltFilter(belt);
         long total = jdbc.queryForObject("SELECT count(*) FROM club_memberships m JOIN users u ON u.id=m.user_id" + filter, Long.class, args.toArray());
         String column = switch (sort.split(",")[0]) {
             case "firstName" -> "lower(u.first_name)";
@@ -83,10 +85,34 @@ public class MemberDirectoryService {
         List<StatusEvent> events = history ? jdbc.query("SELECT old_status, new_status, effective_at, actor_user_id FROM membership_status_events WHERE membership_id=? ORDER BY effective_at, id",
                 (event, row) -> new StatusEvent(event.getString(1), event.getString(2), event.getTimestamp(3).toInstant(), event.getObject(4, Long.class)), id) : List.of();
         String roles = rs.getString("roles");
+        var belt = beltOf(id);
         return new MemberDetail(id, rs.getLong("user_id"), rs.getString("first_name"), rs.getString("last_name"), rs.getString("email"),
                 rs.getString("phone"), roles == null ? List.of() : Arrays.asList(roles.split(",")), rs.getString("account_status"), rs.getString("status"),
-                rs.getObject("joined_on", LocalDate.class), "UNKNOWN", null, null, rs.getTimestamp("created_at").toInstant(),
+                rs.getObject("joined_on", LocalDate.class), belt.belt(), belt.awardedOn(), null, rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant(), rs.getLong("version"), events);
+    }
+
+    private CurrentBeltLookup.CurrentBelt beltOf(long membershipId) {
+        for (CurrentBeltLookup lookup : belts) {
+            var found = lookup.currentBelts(List.of(membershipId)).get(membershipId);
+            if (found != null) return found;
+        }
+        return new CurrentBeltLookup.CurrentBelt("UNKNOWN", null);
+    }
+
+    /** SQL fragment for the belt filter; ids are numbers from the belts module, safe to inline. */
+    private String beltFilter(String belt) {
+        Set<Long> ids = new HashSet<>();
+        if (belt.equals("UNKNOWN")) {
+            belts.forEach(lookup -> ids.addAll(lookup.membershipsWithBeltHistory()));
+            return ids.isEmpty() ? "" : " AND m.id NOT IN (" + join(ids) + ")";
+        }
+        belts.forEach(lookup -> ids.addAll(lookup.membershipsWithCurrentBelt(belt)));
+        return ids.isEmpty() ? " AND false" : " AND m.id IN (" + join(ids) + ")";
+    }
+
+    private static String join(Set<Long> ids) {
+        return String.join(",", ids.stream().map(String::valueOf).toList());
     }
 
     @Transactional
