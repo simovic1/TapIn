@@ -65,6 +65,9 @@ export function TrainingListItem({ training, showDate = true }: { training: Trai
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
         <TrainingStatusBadge status={training.status} />
+        {training.myRegistrationStatus === 'REGISTERED' && !cancelled && (
+          <span className="text-xs font-semibold text-green-800 dark:text-green-300">Prijavljeni ste</span>
+        )}
         {training.registeredCount !== undefined && !cancelled && (
           <span className="text-xs text-slate-600 dark:text-slate-400">Prijavljeno: {training.registeredCount}</span>
         )}

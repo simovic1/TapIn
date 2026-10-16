@@ -162,7 +162,8 @@ describe('training detail', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Dvorana zatvorena');
     expect(screen.getByRole('heading', { level: 1, name: 'Trening' })).toBeInTheDocument();
     expect(screen.getByText('Marko Trener')).toBeInTheDocument();
-    expect(screen.getByText('Niste prijavljeni')).toBeInTheDocument();
+    // No registration actions on a cancelled training, and no registrant data for members.
+    expect(screen.queryByRole('button', { name: 'Prijavi se' })).not.toBeInTheDocument();
     expect(screen.queryByText('Prijavljeno')).not.toBeInTheDocument();
   });
 

@@ -4,7 +4,8 @@ import { hasAnyRole } from '../../../lib/session/roles';
 import { useCurrentUser } from '../../../lib/session/session';
 import { formatLongDate, formatTimeRange } from '../../../lib/format';
 import { useUpcomingTrainings, type TrainingSummary } from '../api';
-import { coachNames, registrationLabel, TrainingStatusBadge, trainingTitle } from './TrainingBits';
+import { RegistrationControl } from './RegistrationControl';
+import { coachNames, TrainingStatusBadge, trainingTitle } from './TrainingBits';
 
 const card = 'rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900';
 const cardTitle = 'mb-2 text-sm font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400';
@@ -92,7 +93,7 @@ function NextTrainingsView({ items }: { items: TrainingSummary[] }) {
 function TrainingHighlight({ training, primary = false }: { training: TrainingSummary; primary?: boolean }) {
   const inProgress = Date.parse(training.startAt) <= Date.now();
   const { data: user } = useCurrentUser();
-  // Registration is a member action: staff without the MEMBER role has no registration status.
+  // Registration is a member action; for staff without MEMBER the details link is the main action.
   const isMember = hasAnyRole(user, ['MEMBER']);
   return (
     <div className="flex flex-col gap-3">
@@ -106,14 +107,12 @@ function TrainingHighlight({ training, primary = false }: { training: TrainingSu
           {training.coaches.length > 0 && ` · ${coachNames(training.coaches)}`}
         </p>
       </div>
-      <p className="text-sm">
-        {inProgress && <span className="mr-2 font-semibold text-green-700 dark:text-green-400">U tijeku</span>}
-        {isMember && <span className="text-slate-700 dark:text-slate-300">{registrationLabel(training)}</span>}
-      </p>
+      {inProgress && <p className="text-sm font-semibold text-green-700 dark:text-green-400">U tijeku</p>}
+      <RegistrationControl training={training} />
       <Link
         to={`/treninzi/${training.trainingId}`}
         className={`inline-flex min-h-11 items-center justify-center rounded-lg px-4 text-sm font-semibold ${
-          primary
+          primary && !isMember
             ? 'bg-slate-900 text-white hover:bg-slate-700 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200'
             : 'border border-slate-300 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800'
         }`}

@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiFetch } from '../../lib/api/client';
+import { ApiError, apiFetch } from '../../lib/api/client';
 import type { Schemas } from '../../lib/api/types';
 
 export type TrainingSummary = Schemas['TrainingSummary'];
@@ -13,6 +13,7 @@ export type RecurringSchedule = Schemas['RecurringSchedule'];
 export type Weekday = Schemas['Weekday'];
 export type CreateRecurringScheduleRequest = Schemas['CreateRecurringScheduleRequest'];
 export type UpdateRecurringScheduleRequest = Schemas['UpdateRecurringScheduleRequest'];
+export type MyRegistrationResult = Schemas['MyRegistrationResult'];
 
 export interface TrainingRange {
   from: string;
@@ -139,4 +140,27 @@ export function useUpdateSchedule(id: number) {
       apiFetch<RecurringSchedule>(`/recurring-schedules/${id}`, { method: 'PATCH', body: JSON.stringify(request) }),
     onSuccess: invalidate,
   });
+}
+
+/**
+ * Own registration (spec §5.1). Never retried automatically. After success the schedule, home and detail are
+ * refreshed; after a 409 too, because the server state differs from what the member saw (e.g. attendance recorded).
+ */
+export function useMyRegistration(trainingId: number) {
+  const queryClient = useQueryClient();
+  const refresh = () => queryClient.invalidateQueries({ queryKey: trainingKeys.all });
+  const onError = (error: unknown) => {
+    if (error instanceof ApiError && error.status === 409) void refresh();
+  };
+  const register = useMutation({
+    mutationFn: () => apiFetch<MyRegistrationResult>(`/trainings/${trainingId}/my-registration`, { method: 'PUT' }),
+    onSuccess: refresh,
+    onError,
+  });
+  const cancel = useMutation({
+    mutationFn: () => apiFetch<MyRegistrationResult>(`/trainings/${trainingId}/my-registration`, { method: 'DELETE' }),
+    onSuccess: refresh,
+    onError,
+  });
+  return { register, cancel };
 }

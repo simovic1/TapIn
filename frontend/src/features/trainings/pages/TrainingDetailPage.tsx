@@ -8,7 +8,8 @@ import { useCurrentUser } from '../../../lib/session/session';
 import { useTraining } from '../api';
 import type { SavedNotice } from './TrainingFormPage';
 import { StaffTrainingActions } from '../components/StaffTrainingActions';
-import { coachNames, registrationLabel, TrainingStatusBadge, trainingTitle } from '../components/TrainingBits';
+import { RegistrationControl } from '../components/RegistrationControl';
+import { coachNames, TrainingStatusBadge, trainingTitle } from '../components/TrainingBits';
 
 export function TrainingDetailPage() {
   const { trainingId } = useParams();
@@ -66,12 +67,6 @@ export function TrainingDetailPage() {
                   <dd className="whitespace-pre-line">{t.note}</dd>
                 </>
               )}
-              {hasAnyRole(user, ['MEMBER']) && (
-                <>
-                  <dt className="text-slate-500 dark:text-slate-400">Vaša prijava</dt>
-                  <dd>{registrationLabel(t)}</dd>
-                </>
-              )}
               {isStaff && t.registeredCount !== undefined && (
                 <>
                   <dt className="text-slate-500 dark:text-slate-400">Prijavljeno</dt>
@@ -81,6 +76,14 @@ export function TrainingDetailPage() {
               <dt className="text-slate-500 dark:text-slate-400">Vrsta</dt>
               <dd>{t.scheduleId ? 'Iz tjednog rasporeda' : 'Izvanredni trening'}</dd>
             </dl>
+            {hasAnyRole(user, ['MEMBER']) && t.status !== 'CANCELLED' && (
+              <section aria-labelledby="my-registration" className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                <h2 id="my-registration" className="mb-2 text-sm font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">
+                  Vaša prijava
+                </h2>
+                <RegistrationControl training={t} size="small" />
+              </section>
+            )}
             {isStaff && <StaffTrainingActions training={t} onReload={() => training.refetch()} />}
           </>
         )}

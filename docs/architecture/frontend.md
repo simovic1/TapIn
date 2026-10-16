@@ -48,7 +48,11 @@ frontend/src/
   kalendar po mjesecima (`?mjesec=YYYY-MM`, jedan upit `[1. u mjesecu 00:00, 1. sljedećeg 00:00)` po zagrebačkom
   vremenu); `/treninzi/:id` je detalj. Otkazani termini imaju tekstualnu oznaku „Otkazan”, precrtano vrijeme i razlog.
 - Član nikad ne vidi tko je prijavljen; `registeredCount` dolazi i prikazuje se samo trenerima/administratorima.
-- Prijava na trening dolazi u BJJ-18 (`myRegistrationStatus` se zasad samo prikazuje).
+- Prijava (BJJ-18): `RegistrationControl` na početnoj (jedan dodir: „Prijavi se” / „Otkaži prijavu”) i na detalju.
+  Gumbe nudi samo kad poslužitelj kaže `canRegister`/`canCancelRegistration`; prijava i stvarni dolazak prikazuju se
+  odvojeno, a nakon evidencije (`PRESENT`/`ABSENT`) samostalne promjene nisu ponuđene. Uspjeh se prikazuje tek nakon
+  odgovora poslužitelja; `409` osvježava prikaz, mrežna greška ostavlja stanje nepromijenjeno. Članovi bez uloge
+  MEMBER (samo trener/admin) ne vide prijavu.
 - Trener/admin (BJJ-16): `/treninzi/novi` (dodatni ili povijesni trening), `/treninzi/:id/uredi` (**samo taj
   termin**; za termin iz pravila jasno piše da ostali termini ostaju), otkazivanje na detalju uz prikaz što se
   otkazuje (datum, vrijeme, broj prijavljenih, „tjedni raspored ostaje”) i `/treninzi/raspored` (tjedna pravila: izmjena
