@@ -9,14 +9,8 @@ import { apiFetch } from '../../../lib/api/client';
 import { errorMessage } from '../../../lib/api/errors';
 import { ROLE_LABELS, type CurrentUser } from '../../../lib/session/roles';
 import { sessionKeys, useCurrentUser } from '../../../lib/session/session';
-import { useBeltHistory } from '../api';
-import { BeltHistoryView } from '../components/BeltHistoryView';
+import { OwnBeltProgress } from '../components/OwnBeltProgress';
 
-/** Own belt history with trainings per belt; read-only - only a trainer changes belts (AC-28). */
-function OwnBelts() {
-  const history = useBeltHistory('me');
-  return <QueryState query={history} loadingLabel="Učitavanje pojaseva…">{data => <BeltHistoryView history={data} />}</QueryState>;
-}
 
 export function ProfilePage() {
   const user = useCurrentUser();
@@ -51,6 +45,6 @@ function OwnProfile({ initial }: { initial: CurrentUser }) {
       <Button type="submit" loading={save.isPending} disabled={reload.isPending}>Spremi telefon</Button>
       {save.isError && <Button onClick={() => reload.mutate()} disabled={save.isPending || reload.isPending}>Učitaj spremljene podatke i odbaci unos</Button>}
     </form>
-    <section className="space-y-3" aria-label="Pojas"><h2 className="text-lg font-semibold">Pojas i povijest pojaseva</h2><OwnBelts /></section>
+    <section className="space-y-3" aria-label="Pojas"><h2 className="text-lg font-semibold">Pojas i povijest pojaseva</h2><OwnBeltProgress /></section>
   </div>;
 }

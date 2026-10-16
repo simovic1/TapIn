@@ -53,6 +53,21 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
+describe('own profile', () => {
+  it('explains a missing belt differently from unknown dates and unassigned trainings', async () => {
+    mockApi({
+      'GET /api/v1/me': () => json(200, makeUser(['MEMBER'])),
+      'GET /api/v1/me/belts': () =>
+        json(200, { ...history, currentBelt: 'UNKNOWN', currentBeltTrainings: 0, periods: [], unassignedTrainings: 7, totalTrainings: 7 }),
+    });
+    renderApp('/profil');
+    expect(await screen.findByText('Još nije evidentiran')).toBeInTheDocument();
+    expect(screen.getByText(/Trener još nije unio vaš pojas/)).toBeInTheDocument();
+    expect(screen.getByText(/Neraspoređeni dolasci \(još bez pojasa\)/)).toHaveTextContent('7');
+    expect(screen.queryByText('datum nije evidentiran')).not.toBeInTheDocument();
+  });
+});
+
 describe('belt management', () => {
   it('shows the history with unknown dates, counts and unassigned trainings', async () => {
     mockApi({
@@ -165,10 +180,20 @@ describe('belt management', () => {
       'GET /api/v1/me/belts': () => json(200, promoted),
     });
     const { router } = renderApp('/profil');
-    expect(await screen.findByRole('list', { name: 'Povijest pojaseva' })).toBeInTheDocument();
+    const table = await screen.findByRole('table', { name: 'Povijest pojaseva' });
     expect(screen.getByText('Trenutačni pojas').nextElementSibling).toHaveTextContent('Plavi');
+    expect(screen.getByText('Ukupno treninga').nextElementSibling).toHaveTextContent('43');
+    expect(screen.getByText('Treninzi u ovom pojasu').nextElementSibling).toHaveTextContent('0');
+    // Earlier belt with its own count, unknown award date, and unassigned trainings: three distinct labels.
+    const rows = within(table).getAllByRole('row');
+    expect(rows[2]).toHaveTextContent('Bijeli');
+    expect(rows[2]).toHaveTextContent('datum nije evidentiran');
+    expect(rows[2]).toHaveTextContent('40');
+    expect(within(table).getByText('Neraspoređeni dolasci').closest('tr')).toHaveTextContent('3');
+    expect(screen.queryByText(/crtic/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Ispravi/ })).not.toBeInTheDocument();
 
+    expect(screen.queryByRole('button', { name: /pojas/i })).not.toBeInTheDocument();
     await router.navigate('/clanovi/5/pojasevi');
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Nemate pristup' })).toBeInTheDocument());
   });
