@@ -12,6 +12,10 @@ import { ROLE_LABELS, type Role } from '../../../lib/session/roles';
 import { getMember, memberKeys, replaceRoles, resendInvitation, updateMember, type Member } from '../api';
 import { MemberStatus, RoleFields, selectClass } from '../MemberFields';
 
+const BELT_NAMES: Record<Member['currentBelt'], string> = {
+  WHITE: 'Bijeli', BLUE: 'Plavi', PURPLE: 'Ljubičasti', BROWN: 'Smeđi', BLACK: 'Crni', UNKNOWN: 'Nepoznat',
+};
+
 export function MemberDetailPage() {
   const id = Number(useParams().membershipId);
   const member = useQuery({ queryKey: memberKeys.detail(id), queryFn: () => getMember(id) });
@@ -96,7 +100,10 @@ function MemberPanel({ initial }: { initial: Member }) {
       <div><dt className="text-sm text-slate-500">Član od</dt><dd>{new Date(member.joinedOn + 'T12:00:00').toLocaleDateString('hr-HR')}</dd></div>
       <div><dt className="text-sm text-slate-500">Uloge</dt><dd>{member.roles.map(role => ROLE_LABELS[role]).join(', ')}</dd></div>
     </dl>}
-    <section className="rounded-xl border p-4" aria-label="Pojas"><h2 className="text-lg font-semibold">Pojas</h2><p>Pojas nije evidentiran.</p></section>
+    <section className="space-y-2 rounded-xl border p-4" aria-label="Pojas"><h2 className="text-lg font-semibold">Pojas</h2>
+      <p>{member.currentBelt === 'UNKNOWN' ? 'Pojas nije evidentiran.' : `${BELT_NAMES[member.currentBelt]} pojas, dodijeljen ${member.currentBeltAwardedOn ? new Date(member.currentBeltAwardedOn + 'T12:00:00').toLocaleDateString('hr-HR') : '(datum nije evidentiran)'}`}</p>
+      <Link to={`/clanovi/${member.membershipId}/pojasevi`} className="inline-flex min-h-11 items-center text-blue-700 underline">Povijest pojaseva, promocije i ispravci</Link>
+    </section>
     <section className="space-y-3 rounded-xl border p-4"><h2 className="text-lg font-semibold">Povijest aktivnosti članstva</h2>
       {member.statusHistory?.length ? <ol className="space-y-2">{member.statusHistory.map((event, index) => <li key={`${event.effectiveAt}-${index}`}>
         <time dateTime={event.effectiveAt}>{new Date(event.effectiveAt).toLocaleString('hr-HR', { timeZone: 'Europe/Zagreb' })}</time>

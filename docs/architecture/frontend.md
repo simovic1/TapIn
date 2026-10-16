@@ -78,6 +78,17 @@ frontend/src/
 - Dodavanje člana koristi `GET /members?q=…&membershipStatus=ACTIVE` (BJJ-10) i `PUT …/attendance/{id}` s verzijom 0.
 - Na uskom ekranu (375 px) redak je ime + dva gumba punom širinom; bez horizontalnog pomicanja.
 
+## Pojasevi (`features/belts`, BJJ-26)
+
+- `/clanovi/:id/pojasevi` (trener/admin; poveznica iz detalja člana): trenutačni pojas, datum dobivanja, treninzi u
+  pojasu i ukupno, razdoblja s brojem treninga, „neraspoređeni” te povijest ispravaka.
+- Obrazac razdvaja **datum dodjele** (stvarni datum polaganja) od **početka brojanja** i prije spremanja prikazuje
+  početak brojanja: „nakon treninga” = sljedeći dan, „prije treninga” = isti dan. Stariji pojas bez poznatog datuma
+  unosi se s „Datum dodjele nije poznat” + „Treninzi se broje od”; datum dodjele ostaje „datum nije evidentiran”.
+- Ispravak traži razlog (audit). `409 VERSION_CONFLICT` otvara obrazac sa svježim stanjem iz `currentState` i traži
+  novu odluku; uspjeh se prikazuje tek nakon odgovora i osvježava povijest (iz odgovora), audit i prikaze članova.
+- `/profil` prikazuje vlastitu povijest pojaseva samo za čitanje (`/me/belts`).
+
 ## Navigacija i ovlasti
 
 - `app/navigation.ts` je jedini izvor stavki izbornika; svaka stavka ima `roles`. Korisnik s više uloga dobiva
