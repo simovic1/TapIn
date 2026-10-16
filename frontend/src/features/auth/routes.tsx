@@ -6,6 +6,7 @@ import { LoginPage } from './pages/LoginPage';
 /** Public routes (rendered without the signed-in layout). */
 export const authRoutes: RouteObject[] = [
   { path: 'prijava', element: <LoginPage /> },
-  { path: 'pozivnica/:token', element: <AcceptInvitationPage /> },
+  // Token in the URL fragment: /pozivnica#<token> (never sent to the server).
+  { path: 'pozivnica', element: <AcceptInvitationPage /> },
   { path: 'zaboravljena-lozinka', element: <ForgotPasswordPage /> },
 ];

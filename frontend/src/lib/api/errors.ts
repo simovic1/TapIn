@@ -8,6 +8,8 @@ const MESSAGES: Partial<Record<ErrorCode, string>> = {
   FORBIDDEN: 'Nemate ovlast za ovu radnju.',
   CSRF_TOKEN_INVALID: 'Sigurnosni token je istekao. Osvježite stranicu i pokušajte ponovno.',
   NOT_FOUND: 'Traženi podatak ne postoji.',
+  INVITATION_INVALID_OR_EXPIRED:
+    'Pozivnica nije valjana ili je istekla. Zatražite novu pozivnicu od trenera.',
   VERSION_CONFLICT: 'Podatak je u međuvremenu izmijenjen. Osvježite prikaz i pokušajte ponovno.',
   RATE_LIMITED: 'Previše pokušaja. Pričekajte nekoliko minuta i pokušajte ponovno.',
   INTERNAL_ERROR: 'Došlo je do neočekivane pogreške na poslužitelju.',

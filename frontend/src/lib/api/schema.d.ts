@@ -94,7 +94,13 @@ export interface paths {
         put?: never;
         /**
          * Aktivacija pozivnice i postavljanje lozinke
-         * @description Jednokratno; nakon uspjeha korisnik je prijavljen. Istekao/iskorišten token → `422 INVITATION_INVALID_OR_EXPIRED`.
+         * @description Jednokratno (atomično, i pri istodobnim zahtjevima); nakon uspjeha račun je `ACTIVE` i korisnik je prijavljen
+         *     (nova sesija + novi CSRF token). Nepostojeći, istekao, iskorišten ili ponovnim slanjem poništen token →
+         *     `422 INVITATION_INVALID_OR_EXPIRED` (isti odgovor za sve slučajeve). Previše neispravnih tokena s iste IP
+         *     adrese → `429`.
+         *
+         *     Poveznica u e-mailu ima oblik `{APP_BASE_URL}/pozivnica#{token}`: token je u fragmentu URL-a, pa ga preglednik
+         *     ne šalje poslužitelju; SPA ga čita iz `location.hash` i šalje u tijelu zahtjeva.
          */
         post: operations["acceptInvitation"];
         delete?: never;
@@ -260,8 +266,9 @@ export interface paths {
         /**
          * Pozivanje novog člana
          * @description TRAINER smije pozvati samo s ulogom `MEMBER`; pokušaj dodjele `TRAINER`/`ADMIN` → `403 ROLE_ASSIGNMENT_FORBIDDEN`.
-         *     ADMIN smije dodijeliti bilo koju ulogu. Postojeći e-mail (bez obzira na velika/mala slova) → `409 DUPLICATE_RESOURCE`.
-         *     Pozivnica vrijedi 7 dana.
+         *     ADMIN smije dodijeliti bilo koju ulogu. Postojeći e-mail (bez obzira na velika/mala slova) → `409 DUPLICATE_RESOURCE`
+         *     i ništa se ne stvara. U jednoj transakciji nastaju račun (`INVITED`), članstvo (`ACTIVE`, zadane uloge),
+         *     pozivnica i e-mail u outboxu. Pozivnica vrijedi 7 dana.
          */
         post: operations["inviteMember"];
         delete?: never;
@@ -281,7 +288,8 @@ export interface paths {
         put?: never;
         /**
          * Ponovno slanje pozivnice
-         * @description Poništava prethodni token i izdaje novi (7 dana). Samo za račune u statusu `INVITED`, inače `422`.
+         * @description Poništava (revoke) sve otvorene pozivnice korisnika – stara poveznica odmah prestaje vrijediti – i izdaje novu
+         *     (7 dana) s novim e-mailom. Samo za račune u statusu `INVITED`, inače `422 BUSINESS_RULE_VIOLATION`.
          */
         post: operations["resendInvitation"];
         delete?: never;
@@ -773,7 +781,10 @@ export interface components {
         /** Format: email */
         Email: string;
         Phone: string;
-        /** Format: password */
+        /**
+         * Format: password
+         * @description Najmanje 10 znakova, najviše 72 bajta u UTF-8 (ograničenje bcrypta; dijakritici zauzimaju 2 bajta).
+         */
         Password: string;
         /** @enum {string} */
         Role: "MEMBER" | "TRAINER" | "ADMIN";

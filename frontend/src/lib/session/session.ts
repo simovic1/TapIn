@@ -48,6 +48,21 @@ export function useLogin() {
   });
 }
 
+/** Activates an invitation; the server signs the new user in (new session), exactly like a login. */
+export function useAcceptInvitation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: Schemas['AcceptInvitationRequest']) =>
+      apiFetch<CurrentUser>('/auth/invitations/accept', { method: 'POST', body: JSON.stringify(request) }),
+    meta: { ignoreUnauthorized: true },
+    onSuccess: (user) => {
+      sessionExpiry.clear();
+      queryClient.clear();
+      queryClient.setQueryData(sessionKeys.currentUser, user);
+    },
+  });
+}
+
 export function useLogout() {
   const queryClient = useQueryClient();
   return useMutation({

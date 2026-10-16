@@ -1,5 +1,8 @@
 package com.tapin.auth;
 
+import com.tapin.shared.error.ApiException;
+import com.tapin.shared.error.ErrorCode;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +29,27 @@ public class UserAccountService {
     @Transactional(readOnly = true)
     public Optional<UserRef> findById(long userId) {
         return users.findById(userId).map(UserAccountService::toRef);
+    }
+
+    /**
+     * Creates an INVITED account (no password). E-mail is unique regardless of case: an existing address gives
+     * {@code 409 DUPLICATE_RESOURCE} and nothing is created (also under concurrent requests, via the unique index).
+     */
+    @Transactional
+    public UserRef createInvitedUser(String email, String firstName, String lastName) {
+        String normalized = email.strip();
+        if (users.findByEmailIgnoreCase(normalized).isPresent()) {
+            throw duplicateEmail();
+        }
+        try {
+            return toRef(users.saveAndFlush(UserAccount.invited(normalized, firstName.strip(), lastName.strip())));
+        } catch (DataIntegrityViolationException e) {
+            throw duplicateEmail();
+        }
+    }
+
+    private static ApiException duplicateEmail() {
+        return new ApiException(ErrorCode.DUPLICATE_RESOURCE, "Korisnik s tom e-mail adresom već postoji.");
     }
 
     /** Creates an ACTIVE account. The raw password is hashed here and never stored or logged. */

@@ -17,6 +17,28 @@ Modul `auth` (spec §2–3, §14). Konfiguracija: `com.tapin.auth.SecurityConfig
   račun ili uklonjeno članstvo gubi pristup odmah (sljedeći zahtjev = 401), promjena uloga vrijedi bez nove prijave.
 - Anonimni zahtjevi ne stvaraju sesiju (request cache isključen; SPA sama pamti povratnu stranicu).
 
+## Pozivnice i aktivacija (BJJ-07)
+
+- `POST /members/invitations` (TRAINER/ADMIN): u **jednoj transakciji** nastaju račun `INVITED` (bez lozinke),
+  članstvo `ACTIVE` sa zadanim ulogama, pozivnica i e-mail u outboxu. Trener smije zadati samo `MEMBER`
+  (`RoleAssignmentPolicy`, `403 ROLE_ASSIGNMENT_FORBIDDEN`). Postojeći e-mail (bez obzira na velika/mala slova) →
+  `409 DUPLICATE_RESOURCE`, ništa se ne stvara (provjera + jedinstveni indeks za istodobne zahtjeve).
+- **Token:** 256 nasumičnih bita (base64url); u bazi samo SHA-256 hash. Vrijedi 7 dana
+  (`tapin.invitation.validity`).
+- **Poveznica:** `{APP_BASE_URL}/pozivnica#{token}`. Token je u fragmentu URL-a, pa ga preglednik ne šalje
+  poslužitelju ni proxyju (ne završava u access logovima ni `Referer`-u); SPA ga šalje u tijelu POST zahtjeva.
+  Payload outbox retka (s poveznicom) briše se nakon slanja.
+- `POST /auth/invitations/preview` i `POST /auth/invitations/accept` (javno, uz CSRF): nepostojeći, istekao,
+  iskorišten ili poništen token daju isti `422 INVITATION_INVALID_OR_EXPIRED`; 20 neispravnih tokena s iste IP adrese
+  u 15 min → `429`.
+- **Aktivacija** je jednokratna i atomična (uvjetni `UPDATE ... WHERE accepted_at IS NULL AND revoked_at IS NULL AND
+  expires_at > now`), pa ni istodobni zahtjevi ne mogu iskoristiti token dvaput. Postavlja lozinku (min. 10 znakova,
+  max. 72 bajta zbog bcrypta), račun prelazi u `ACTIVE` i korisnik je odmah prijavljen (nova sesija + CSRF token).
+- **Ponovno slanje** (`POST /members/{membershipId}/invitations/resend`): poništava (`revoked_at`) sve otvorene
+  pozivnice korisnika – stara poveznica odmah prestaje vrijediti – i šalje novu. Samo za račune `INVITED`, inače `422`.
+- Status računa (`INVITED` → `ACTIVE`, `DISABLED`) i status članstva (`ACTIVE`/`INACTIVE`) su odvojeni: pozvani član
+  ima aktivno članstvo, ali se ne može prijaviti dok ne aktivira račun.
+
 ## Kolačići
 
 | Kolačić | HttpOnly | Secure | SameSite | Napomena |

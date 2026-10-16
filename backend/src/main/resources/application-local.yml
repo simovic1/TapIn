@@ -22,8 +22,11 @@ server:
         secure: false
 
 tapin:
+  app:
+    # Vite dev server; use http://localhost:3000 or https://localhost:8443 for the Docker variants.
+    base-url: ${APP_BASE_URL:http://localhost:5173}
   club:
-    name: ${CLUB_NAME:BJJ klub (local)}
+    name: ${CLUB_NAME:Black Dragon Samobor (local)}
   mail:
     from: ${MAIL_FROM:no-reply@tapin.local}
   bootstrap:

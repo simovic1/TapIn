@@ -13,6 +13,8 @@ server:
         secure: false
 
 tapin:
+  app:
+    base-url: https://tapin.test
   club:
     name: Test klub
   mail:

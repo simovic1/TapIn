@@ -55,6 +55,11 @@ server:
         same-site: lax
 
 tapin:
+  app:
+    # Public HTTPS origin of the web app, used for links in e-mails (invitations, password reset).
+    base-url: ${APP_BASE_URL}
+  invitation:
+    validity: 7d
   club:
     name: ${CLUB_NAME:BJJ klub}
     time-zone: Europe/Zagreb

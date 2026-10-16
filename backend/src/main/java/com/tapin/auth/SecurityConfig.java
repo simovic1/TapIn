@@ -46,7 +46,7 @@ import java.util.function.Supplier;
  */
 @Configuration(proxyBeanMethods = false)
 @EnableMethodSecurity
-@EnableConfigurationProperties(LoginAttemptProperties.class)
+@EnableConfigurationProperties({LoginAttemptProperties.class, InvitationProperties.class})
 public class SecurityConfig {
 
     public static final String SESSION_COOKIE = "TAPIN_SESSION";

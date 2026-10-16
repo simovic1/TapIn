@@ -54,6 +54,8 @@ services:
       MAIL_HOST: mail
       MAIL_PORT: 1025
       CLUB_NAME: ${CLUB_NAME:-BJJ klub (local)}
+      # Origin used in e-mail links (https://localhost:8443 with the https profile)
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@tapin.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-local-dev-admin-password}
       # true when served through the HTTPS proxy below (as in production)

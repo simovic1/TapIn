@@ -65,6 +65,28 @@ class UserAccount {
         return user;
     }
 
+    /** Account created by an invitation: no password until the invitation is accepted. */
+    static UserAccount invited(String email, String firstName, String lastName) {
+        UserAccount user = new UserAccount();
+        user.email = email;
+        user.firstName = firstName;
+        user.lastName = lastName;
+        user.accountStatus = AccountStatus.INVITED;
+        return user;
+    }
+
+    /** Accepting the invitation: the user confirms their name, optionally adds a phone, and sets a password. */
+    void activate(String passwordHash, String firstName, String lastName, String phone) {
+        if (accountStatus != AccountStatus.INVITED) {
+            throw new IllegalStateException("Only INVITED accounts can be activated");
+        }
+        this.passwordHash = passwordHash;
+        this.firstName = firstName;
+        this.lastName = lastName;
+        this.phone = phone;
+        this.accountStatus = AccountStatus.ACTIVE;
+    }
+
     Long getId() { return id; }
     String getEmail() { return email; }
     String getFirstName() { return firstName; }
