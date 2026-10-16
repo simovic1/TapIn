@@ -1120,7 +1120,10 @@ paths:
       description: |
         Ne mijenja `PRESENT`/`ABSENT` ni otkazane prijave (AC-07, AC-20). Za svakog promijenjenog člana nastaje
         zaseban audit (`source=BULK`) i zasebna obavijest. Ponovni poziv je idempotentan (`updatedCount=0`).
+        Stanje svakog člana ponovno se provjerava u trenutku izmjene (pod istom bravom kao pojedinačni upis i
+        samostalni otkaz prijave), pa istodobno upisan `PRESENT` ili upravo otkazana prijava ostaju netaknuti.
         `expectedMembershipIds` (opcionalno) ograničava radnju na članove prikazane u potvrdi; drugi se preskaču.
+        Trening koji još nije počeo → `422 BUSINESS_RULE_VIOLATION`; otkazan trening → `422 TRAINING_CANCELLED`.
       security:
         - sessionCookie: []
           csrfToken: []

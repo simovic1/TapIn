@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -85,6 +86,10 @@ public class AttendanceService {
     public record AttendanceResult(long trainingId, long membershipId, long userId, AttendanceStatus status,
                                    long version, boolean changed, Instant updatedAt, Long updatedByUserId,
                                    String notificationStatus) {
+    }
+
+    /** {@code BulkAttendanceResult}: only members that actually changed. */
+    public record BulkResult(long trainingId, int updatedCount, List<AttendanceResult> results) {
     }
 
     public record AuditEntry(long auditId, long trainingId, long membershipId, long actorUserId,
@@ -184,15 +189,80 @@ public class AttendanceService {
         if (currentVersion != expectedVersion) {
             throw conflict(trainingId, member, current);
         }
+        AttendanceResult written = write(actor, session, member, current, target, source, note, now);
+        if (written == null) {
+            throw conflict(trainingId, member, attendances.find(trainingId, membershipId).orElse(null));
+        }
+        return written;
+    }
+
+    /**
+     * "Označi sve preostale odsutnima" (spec §6.3, AC-07/20): REGISTERED members whose attendance is UNMARKED become
+     * ABSENT, each with its own audit row ({@code BULK}) and its own e-mail. PRESENT, ABSENT and cancelled
+     * registrations are never touched; repeating the call changes nothing.
+     * <p>
+     * The state is re-checked per member at the moment of the change, under that member's participation lock: a
+     * trainer who just marked someone PRESENT, or a member who just cancelled, is left alone. Locks are taken in
+     * ascending membership order and before the session lock - the same order as single writes - so they cannot
+     * deadlock. {@code expectedMembershipIds} limits the action to the members shown in the confirmation.
+     */
+    @Transactional
+    public BulkResult markUnconfirmedAbsent(AuthenticatedUser actor, long trainingId, Set<Long> expectedMembershipIds,
+                                            String note) {
+        List<Long> candidates = registrations.registrationsOf(trainingId).entrySet().stream()
+                .filter(e -> e.getValue() == RegistrationStatus.REGISTERED)
+                .map(Map.Entry::getKey)
+                .filter(id -> expectedMembershipIds == null || expectedMembershipIds.contains(id))
+                .sorted()
+                .toList();
+        candidates.forEach(id -> lock.acquire(trainingId, id));
+        SessionRef session = trainings.lockForParticipation(trainingId);
+        Instant now = clock.instant();
+        if (session.status() == TrainingStatus.CANCELLED) {
+            throw new ApiException(ErrorCode.TRAINING_CANCELLED, "Trening je otkazan; dolazak se ne evidentira.");
+        }
+        if (session.startAt().isAfter(now)) {
+            throw ApiException.businessRule("Trening još nije počeo, pa nitko ne može biti označen odsutnim.");
+        }
+        Map<Long, MemberRef> members = directory.findAll(candidates);
+        List<AttendanceResult> changed = new ArrayList<>();
+        for (Long id : candidates) {
+            MemberRef member = members.get(id);
+            // Re-check under the lock: the registration may have been cancelled or attendance recorded meanwhile.
+            if (member == null || registrations.statusOf(trainingId, id) != RegistrationStatus.REGISTERED) {
+                continue;
+            }
+            Attendance current = attendances.find(trainingId, id).orElse(null);
+            if (current != null && current.status() != AttendanceStatus.UNMARKED) {
+                continue;
+            }
+            if (member.status() != MembershipStatus.ACTIVE && !session.hasEnded(now)) {
+                continue; // same rule as single writes: inactive members are not added to a running session
+            }
+            AttendanceResult result = write(actor, session, member, current, AttendanceStatus.ABSENT,
+                    AttendanceSource.BULK, note, now);
+            if (result != null) {
+                changed.add(result);
+            }
+        }
+        return new BulkResult(trainingId, changed.size(), changed);
+    }
+
+    /** Writes the change, its audit row and its e-mail; {@code null} if the row changed meanwhile (version). */
+    private AttendanceResult write(AuthenticatedUser actor, SessionRef session, MemberRef member, Attendance current,
+                                   AttendanceStatus target, AttendanceSource source, String note, Instant now) {
+        long trainingId = session.trainingId();
+        long membershipId = member.membershipId();
+        AttendanceStatus previous = current != null ? current.status() : AttendanceStatus.UNMARKED;
         boolean written = current == null
                 ? attendances.insert(trainingId, directory.theClub().clubId(), membershipId, target, actor.userId(), now)
                         .isPresent()
-                : attendances.update(current.id(), expectedVersion, target, actor.userId(), now);
+                : attendances.update(current.id(), current.version(), target, actor.userId(), now);
         if (!written) {
-            throw conflict(trainingId, member, attendances.find(trainingId, membershipId).orElse(null));
+            return null;
         }
         String cleanNote = note == null || note.isBlank() ? null : note.strip();
-        long auditId = attendances.insertAudit(trainingId, membershipId, actor.userId(), currentStatus, target, source,
+        long auditId = attendances.insertAudit(trainingId, membershipId, actor.userId(), previous, target, source,
                 cleanNote, now);
         EnqueueResult queued = outbox.enqueue(OutboxMessage.of(EmailEventType.ATTENDANCE_RECORDED, member.userId(),
                 member.email(), Map.of("firstName", member.firstName(), "trainingTime", session.displayTime(),

@@ -3,8 +3,10 @@ package com.tapin.attendance;
 import com.tapin.MutableClock;
 import com.tapin.TestcontainersConfiguration;
 import com.tapin.auth.AuthRequestLimiter;
+import com.tapin.auth.AuthenticatedUser;
 import com.tapin.auth.TestUsers;
 import com.tapin.notifications.OutboxTestSupport;
+import com.tapin.registrations.ParticipationLock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,12 +17,14 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
@@ -67,6 +71,9 @@ class AttendanceIntegrationTest {
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired MutableClock clock;
     @Autowired ApplicationContext context;
+    @Autowired TransactionTemplate tx;
+    @Autowired AttendanceService attendanceService;
+    @Autowired ParticipationLock participationLock;
 
     TestUsers users;
     long training;
@@ -358,6 +365,160 @@ class AttendanceIntegrationTest {
         mark(anaSession, ana, "PRESENT", 0, null).andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/trainings/" + training + "/attendance/audit").session(anaSession))
                 .andExpect(status().isForbidden());
+    }
+
+    // ---------------------------------------------------------------- BJJ-20: bulk "mark the rest absent"
+
+    long registeredMember(String email, String lastName) throws Exception {
+        long id = users.active(email, "MEMBER").membershipId();
+        jdbc.update("UPDATE users SET last_name = ? WHERE email = ?", lastName, email);
+        register(login(email)).andExpect(status().isOk());
+        return id;
+    }
+
+    ResultActions bulk(MockHttpSession session, Object body) throws Exception {
+        var request = post("/api/v1/trainings/" + training + "/attendance/mark-unconfirmed-absent").session(session)
+                .with(csrf());
+        if (body != null) {
+            request.contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body));
+        }
+        return mvc.perform(request);
+    }
+
+    @Test
+    void bulkMarksOnlyRegisteredUnmarkedMembersEachWithOwnAuditAndEmail() throws Exception {
+        register(login("ana@klub.hr")).andExpect(status().isOk());               // REGISTERED + UNMARKED
+        long ivo = registeredMember("ivo@klub.hr", "Ivić");                     // REGISTERED + UNMARKED
+        long eva = registeredMember("eva@klub.hr", "Ević");                     // REGISTERED + PRESENT
+        long iva = registeredMember("iva@klub.hr", "Ivanić");                   // REGISTERED + ABSENT
+        long luka = registeredMember("luka@klub.hr", "Lukić");                  // CANCELLED + UNMARKED
+        long walkIn = users.active("gost@klub.hr", "MEMBER").membershipId();     // no registration + PRESENT
+        mark(trainer, eva, "PRESENT", 0, null).andExpect(status().isOk());
+        mark(trainer, iva, "ABSENT", 0, null).andExpect(status().isOk());
+        mark(trainer, walkIn, "PRESENT", 0, null).andExpect(status().isOk());
+        mvc.perform(delete("/api/v1/trainings/" + training + "/my-registration").session(login("luka@klub.hr"))
+                .with(csrf())).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/trainings/" + training + "/roster").session(trainer))
+                .andExpect(jsonPath("$.counts.unmarked").value(2));
+        long auditsBefore = count("attendance_audit_logs");
+        long emailsBefore = jdbc.queryForObject(
+                "SELECT count(*) FROM email_outbox WHERE event_type = 'ATTENDANCE_RECORDED'", Long.class);
+
+        bulk(trainer, Map.of("note", "Nisu došli"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.trainingId").value(training))
+                .andExpect(jsonPath("$.updatedCount").value(2))
+                .andExpect(jsonPath("$.results.length()").value(2))
+                .andExpect(jsonPath("$.results[0].status").value("ABSENT"))
+                .andExpect(jsonPath("$.results[0].changed").value(true))
+                .andExpect(jsonPath("$.results[0].notificationStatus").value("QUEUED"));
+
+        Map<Long, String> statuses = new HashMap<>();
+        jdbc.query("SELECT membership_id, status FROM training_attendances WHERE session_id = ?",
+                (java.sql.ResultSet rs) -> { statuses.put(rs.getLong(1), rs.getString(2)); }, training);
+        assertThat(statuses).containsEntry(ana, "ABSENT").containsEntry(ivo, "ABSENT").containsEntry(eva, "PRESENT")
+                .containsEntry(iva, "ABSENT").containsEntry(walkIn, "PRESENT").doesNotContainKey(luka);
+        // One audit row and one e-mail per changed member, all marked BULK with the note.
+        assertThat(jdbc.queryForList("SELECT membership_id FROM attendance_audit_logs WHERE action_source = 'BULK' "
+                + "AND note = 'Nisu došli' AND old_status = 'UNMARKED' AND new_status = 'ABSENT' ORDER BY membership_id",
+                Long.class)).containsExactly(ana, ivo);
+        assertThat(count("attendance_audit_logs")).isEqualTo(auditsBefore + 2);
+        assertThat(jdbc.queryForObject("SELECT count(DISTINCT deduplication_key) FROM email_outbox "
+                + "WHERE event_type = 'ATTENDANCE_RECORDED'", Long.class)).isEqualTo(emailsBefore + 2);
+        // Iva was already ABSENT: her row is untouched (AC-20), no second e-mail.
+        assertThat(jdbc.queryForObject("SELECT version FROM training_attendances WHERE membership_id = ?", Long.class, iva))
+                .isEqualTo(1);
+
+        // Repeating changes nothing.
+        bulk(trainer, null).andExpect(status().isOk()).andExpect(jsonPath("$.updatedCount").value(0))
+                .andExpect(jsonPath("$.results.length()").value(0));
+        assertThat(count("attendance_audit_logs")).isEqualTo(auditsBefore + 2);
+    }
+
+    @Test
+    void bulkIsLimitedToTheMembersShownInTheConfirmation() throws Exception {
+        register(login("ana@klub.hr")).andExpect(status().isOk());
+        long ivo = registeredMember("ivo@klub.hr", "Ivić");
+
+        bulk(trainer, Map.of("expectedMembershipIds", List.of(ana))).andExpect(jsonPath("$.updatedCount").value(1))
+                .andExpect(jsonPath("$.results[0].membershipId").value(ana));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM training_attendances WHERE membership_id = ?",
+                Integer.class, ivo)).isZero();
+    }
+
+    @Test
+    void bulkIsRefusedBeforeTheStartAndOnCancelledSessions() throws Exception {
+        register(login("ana@klub.hr")).andExpect(status().isOk());
+        clock.set(Instant.parse("2026-10-20T16:00:00Z")); // 18:00 local, not started
+        bulk(trainer, null).andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.errorCode").value("BUSINESS_RULE_VIOLATION"));
+        jdbc.update("UPDATE training_sessions SET status = 'CANCELLED', cancelled_at = now() WHERE id = ?", training);
+        clock.set(DURING_TRAINING);
+        bulk(trainer, null).andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.errorCode").value("TRAINING_CANCELLED"));
+        bulk(login("ana@klub.hr"), null).andExpect(status().isForbidden());
+        assertThat(count("training_attendances")).isZero();
+    }
+
+    @Test
+    void concurrentSingleMarkIsNotOverwrittenByTheBulkAction() throws Exception {
+        register(login("ana@klub.hr")).andExpect(status().isOk());
+        AuthenticatedUser trainerPrincipal = (AuthenticatedUser) ((SecurityContext) trainer
+                .getAttribute("SPRING_SECURITY_CONTEXT")).getAuthentication().getPrincipal();
+        CountDownLatch marked = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            // Trainer A marks Ana PRESENT; the transaction is still open when trainer B starts the bulk action.
+            Future<?> single = pool.submit(() -> tx.executeWithoutResult(status -> {
+                attendanceService.set(trainerPrincipal, training, ana, AttendanceStatus.PRESENT, 0, null,
+                        AttendanceSource.SINGLE);
+                marked.countDown();
+                sleep(700);
+            }));
+            assertThat(marked.await(5, TimeUnit.SECONDS)).isTrue();
+            Future<String> bulkCall = pool.submit(() -> bulk(trainer, null).andReturn().getResponse().getContentAsString());
+            single.get(10, TimeUnit.SECONDS);
+            assertThat(json.readTree(bulkCall.get(10, TimeUnit.SECONDS)).get("updatedCount").asInt()).isZero();
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(jdbc.queryForObject("SELECT status FROM training_attendances WHERE membership_id = ?", String.class, ana))
+                .isEqualTo("PRESENT");
+        assertThat(jdbc.queryForList("SELECT action_source FROM attendance_audit_logs", String.class))
+                .containsExactly("SINGLE");
+    }
+
+    @Test
+    void memberCancellingDuringTheBulkActionIsNotMarkedAbsent() throws Exception {
+        MockHttpSession anaSession = login("ana@klub.hr");
+        register(anaSession).andExpect(status().isOk());
+        CountDownLatch cancelled = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            // Ana's cancel holds her participation lock when the bulk action reads the candidates.
+            Future<?> cancel = pool.submit(() -> tx.executeWithoutResult(status -> {
+                participationLock.acquire(training, ana);
+                jdbc.update("UPDATE training_registrations SET status = 'CANCELLED', cancelled_at = now() "
+                        + "WHERE membership_id = ?", ana);
+                cancelled.countDown();
+                sleep(700);
+            }));
+            assertThat(cancelled.await(5, TimeUnit.SECONDS)).isTrue();
+            Future<String> bulkCall = pool.submit(() -> bulk(trainer, null).andReturn().getResponse().getContentAsString());
+            cancel.get(10, TimeUnit.SECONDS);
+            assertThat(json.readTree(bulkCall.get(10, TimeUnit.SECONDS)).get("updatedCount").asInt()).isZero();
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(count("training_attendances")).isZero();
+    }
+
+    static void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     // ---------------------------------------------------------------- helpers

@@ -2,6 +2,7 @@ package com.tapin.attendance;
 
 import com.tapin.attendance.AttendanceService.AttendanceResult;
 import com.tapin.attendance.AttendanceService.AuditPage;
+import com.tapin.attendance.AttendanceService.BulkResult;
 import com.tapin.attendance.AttendanceService.Roster;
 import com.tapin.auth.AuthenticatedUser;
 import com.tapin.shared.api.ApiPaths;
@@ -16,11 +17,14 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Set;
 
 /** TRAINER/ADMIN only (ApiAuthorizationRules); any trainer may record any session, assigned or not. */
 @Tag(name = "Attendance")
@@ -61,6 +65,17 @@ class AttendanceController {
                            @PathVariable long membershipId, @RequestParam @Min(0) long expectedVersion,
                            @RequestParam(required = false) @Size(max = 500) String note) {
         return service.reset(actor, trainingId, membershipId, expectedVersion, note);
+    }
+
+    record BulkAbsentRequest(Set<Long> expectedMembershipIds, @Size(max = 500) String note) {
+    }
+
+    @Operation(summary = "Označi sve preostale (REGISTERED + UNMARKED) odsutnima")
+    @PostMapping("/attendance/mark-unconfirmed-absent")
+    BulkResult markUnconfirmedAbsent(@AuthenticationPrincipal AuthenticatedUser actor, @PathVariable long trainingId,
+                                     @Valid @RequestBody(required = false) BulkAbsentRequest request) {
+        return service.markUnconfirmedAbsent(actor, trainingId, request != null ? request.expectedMembershipIds() : null,
+                request != null ? request.note() : null);
     }
 
     @Operation(summary = "Audit prisutnosti za trening (append-only)")
