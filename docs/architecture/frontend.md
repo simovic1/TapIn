@@ -63,6 +63,21 @@ frontend/src/
   prikazuje tek nakon odgovora poslužitelja (`mutateAsync`, otporno na ponovno montiranje obrasca), a svaka uspješna
   promjena invalidira cijeli `trainingKeys.all` pa se kalendar osvježi.
 
+## Prozivka (`features/attendance`)
+
+- `/prozivka` predlaže trening (u tijeku → završen u zadnjih 6 h → sljedeći) i nudi ostale iz ±7 dana;
+  `/prozivka/:id` je roster: brojači (prijavljeni, prisutni, odsutni, nepotvrđeni), redak po članu s velikim gumbima
+  „Prisutan”/„Odsutan” (`aria-pressed`) i „Poništi oznaku”, dodavanje neprijavljenog člana i masovna radnja.
+- Svaki dodir sprema odmah (bez gumba „Spremi”) s `expectedVersion` retka. Redak sam pokazuje „Spremanje…”,
+  „Spremljeno” ili „Greška pri spremanju” s „Pokušaj ponovno”; promjena se prikazuje tek nakon potvrde poslužitelja
+  i upisuje u predmemoriju rostera (brojači se preračunavaju lokalno, bez ponovnog dohvata po dodiru).
+- `409 VERSION_CONFLICT`: redak preuzima `currentState` s poslužitelja i jasno kaže što je drugi trener upisao;
+  trener odlučuje ponovno (nikad tiho prepisivanje).
+- Masovno „odsutni” traži potvrdu s popisom kandidata (REGISTERED + nije označeno) i šalje `expectedMembershipIds`;
+  rezultat prikazuje stvarni `updatedCount`. Walk-in i već označeni ostaju vidljivi u rosteru i brojačima.
+- Dodavanje člana koristi `GET /members?q=…&membershipStatus=ACTIVE` (BJJ-10) i `PUT …/attendance/{id}` s verzijom 0.
+- Na uskom ekranu (375 px) redak je ime + dva gumba punom širinom; bez horizontalnog pomicanja.
+
 ## Navigacija i ovlasti
 
 - `app/navigation.ts` je jedini izvor stavki izbornika; svaka stavka ima `roles`. Korisnik s više uloga dobiva

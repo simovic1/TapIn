@@ -50,6 +50,12 @@ export function StaffTrainingActions({ training, onReload }: { training: Trainin
       {training.status !== 'CANCELLED' && (
         <div className="flex flex-wrap gap-2">
           <Link
+            to={`/prozivka/${training.trainingId}`}
+            className="inline-flex min-h-11 items-center rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700 dark:bg-white dark:text-slate-900"
+          >
+            Prozivka
+          </Link>
+          <Link
             to={`/treninzi/${training.trainingId}/uredi`}
             className="inline-flex min-h-11 items-center rounded-lg border border-slate-300 px-4 text-sm font-semibold hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
           >
