@@ -17,6 +17,13 @@ tapin:
     name: Test klub
   mail:
     from: test@tapin.local
+    provider: log
+  # Tests drive the outbox processor explicitly.
+  scheduling:
+    enabled: false
+  outbox:
+    worker:
+      enabled: false
   bootstrap:
     admin:
       # Tests call AdminBootstrapService explicitly.

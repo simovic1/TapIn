@@ -43,7 +43,8 @@ class SchemaMigrationIntegrationTest {
     @Test
     void migrationsApplyOnEmptyDatabaseAndRerunIsANoOp() {
         assertThat(Arrays.stream(flyway.info().applied()).map(m -> m.getVersion().getVersion()))
-                .containsExactly("001", "002", "003");
+                .startsWith("001", "002", "003")
+                .hasSameSizeAs(flyway.info().all());
         assertThat(flyway.info().pending()).isEmpty();
 
         // Simulates the next application start against the same database.

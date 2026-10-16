@@ -7,7 +7,7 @@ Shemu baze isključivo vodi **Flyway** (`backend/src/main/resources/db/migration
 
 | Vrsta | Format | Primjer |
 |---|---|---|
-| Verzionirana | `V{NNN}__{modul}_{opis}.sql` | `V007__attendance_attendances_audit.sql` |
+| Verzionirana | `V{NNN}__{modul}_{opis}.sql` | `V008__attendance_attendances_audit.sql` |
 | Repeatable (pogledi, funkcije) | `R__{modul}_{opis}.sql` | `R__reporting_member_attendance_view.sql` |
 
 - `NNN` – troznamenkasti, **globalni, uzastopni** broj (jedna povijest za cijeli monolit).
@@ -25,19 +25,20 @@ sh scripts/check-migrations.sh
 ## Dogovoreni redoslijed (MVP)
 
 Redoslijed slijedi ovisnosti tablica i backlog (§16). Brojevi su rezervirani; ako se plan promijeni, ažurira se
-ova tablica u istom PR-u.
+ova tablica u istom PR-u. (Outbox je zbog BJJ-05 dobio V004, pa su planirane migracije V005–V009 pomaknute za
+jedan; komentar u `V001` ostaje izvorni jer se primijenjena migracija ne mijenja.)
 
 | Verzija | Datoteka | Modul | Sadržaj | Faza |
 |---|---|---|---|---|
 | V001 | `V001__shared_baseline.sql` | shared | Baseline, bez tablica | 0 ✅ |
 | V002 | `V002__auth_users.sql` | auth | `users` (email jedinstven bez obzira na velika/mala slova – `uk_users_email_lower`, `account_status`) | 1 ✅ |
 | V003 | `V003__members_clubs_memberships_roles.sql` | members | `clubs` (+ seed jednog kluba `Europe/Zagreb`, `uk_clubs_single_club`), `club_memberships` (`uk_club_memberships_club_user`), `membership_roles` (`pk_membership_roles`), `membership_status_events` | 1 ✅ |
-| V004 | `V004__auth_invitations_password_resets.sql` | auth | `invitations`, `password_reset_tokens` | 1 |
-| V005 | `V005__scheduling_recurring_schedules_sessions.sql` | scheduling | `recurring_schedules` (+ seed uto/čet 18:30–20:00), `training_sessions`, `session_coaches` | 2 |
-| V006 | `V006__registrations_training_registrations.sql` | registrations | `training_registrations`, `registration_events` | 2 |
-| V007 | `V007__attendance_attendances_audit.sql` | attendance | `training_attendances`, `attendance_audit_logs` | 3 |
-| V008 | `V008__belts_belt_periods_audit.sql` | belts | `member_belt_periods`, `belt_period_audit_logs` | 4 |
-| V009 | `V009__notifications_email_outbox.sql` | notifications | `email_outbox` | 5 |
+| V004 | `V004__notifications_email_outbox.sql` | notifications | `email_outbox` (outbox, deduplikacija, lease) – BJJ-05 | 5 ✅ |
+| V005 | `V005__auth_invitations_password_resets.sql` | auth | `invitations`, `password_reset_tokens` | 1 |
+| V006 | `V006__scheduling_recurring_schedules_sessions.sql` | scheduling | `recurring_schedules` (+ seed uto/čet 18:30–20:00), `training_sessions`, `session_coaches`; FK `email_outbox.session_id` → `training_sessions` | 2 |
+| V007 | `V007__registrations_training_registrations.sql` | registrations | `training_registrations`, `registration_events` | 2 |
+| V008 | `V008__attendance_attendances_audit.sql` | attendance | `training_attendances`, `attendance_audit_logs` | 3 |
+| V009 | `V009__belts_belt_periods_audit.sql` | belts | `member_belt_periods`, `belt_period_audit_logs` | 4 |
 | R__ | `R__reporting_*.sql` | reporting | Read-only pogledi za statistiku | 6 |
 
 Admin seed (prvi administrator) **nije** u migraciji jer zahtijeva tajnu. Radi ga `AdminBootstrapService`

@@ -71,7 +71,8 @@ cp .env.example .env        # opcionalno – zadane vrijednosti već odgovaraju 
 docker compose up -d
 ```
 
-PostgreSQL je na `localhost:5432` (baza/korisnik/lozinka: `tapin`), Mailpit UI na <http://localhost:8025>.
+PostgreSQL je na `localhost:5432` (baza/korisnik/lozinka: `tapin`), Mailpit UI na <http://localhost:8025> –
+tamo stižu svi e-mailovi iz lokalnog okruženja (outbox worker šalje ih preko SMTP-a na Mailpit).
 
 ### 2. Backend
 
@@ -155,6 +156,7 @@ CI (`.github/workflows/ci.yml`) pokreće sve provjere na svaki push i pull reque
 - [Moduli i vlasništvo](docs/architecture/modules.md) – odgovornosti, tablice, API i smjer ovisnosti po modulu
 - [Flyway migracije](docs/architecture/database-migrations.md) – imenovanje, dogovoreni redoslijed, SQL konvencije, bootstrap administratora
 - [API ugovor](docs/architecture/api-contract.md) – OpenAPI, mock, generirani tipovi, ključne odluke
+- [E-mail obavijesti](docs/architecture/notifications.md) – transactional outbox, worker, retry, deduplikacija, garancija dostave
 - [Frontend osnova](docs/architecture/frontend.md) – sesija i CSRF, navigacija po ulogama, komponente, pristupačnost
 - [Konvencije koda](docs/architecture/conventions.md) – imenovanje u backendu, API-ju, frontendu i gitu
 
