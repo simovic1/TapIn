@@ -62,6 +62,8 @@ npm run test:watch
 Testovi pokrivaju filtriranje navigacije po ulogama, CSRF zaglavlje i problem+json u `apiFetch`, prijavu,
 pogrešne vjerodajnice, istek sesije, 403 rutu, odjavu te pristupačnost osnovnih komponenti.
 
+Prijava radi protiv pravog backenda (lokalno `admin@tapin.local` / `local-dev-admin-password`).
+
 ## Rad bez backenda
 
 `npm --prefix api run mock` + `npm run dev:mock`. Vite proxy u mock načinu postavlja `XSRF-TOKEN` i, nakon

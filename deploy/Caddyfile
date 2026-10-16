@@ -1,0 +1,20 @@
+# Local HTTPS reverse proxy (docker compose --profile app --profile https).
+# Mirrors production: TLS terminates here, the SPA and the API share one origin, and the backend learns the
+# original scheme from X-Forwarded-Proto (Caddy sets it) so Secure cookies and redirects are correct.
+# `tls internal` uses Caddy's own local CA (the browser will warn unless that CA is trusted).
+{
+	auto_https disable_redirects
+}
+
+https://localhost:8443 {
+	tls internal
+
+	@backend path /api/* /actuator/* /v3/api-docs* /swagger-ui*
+	handle @backend {
+		reverse_proxy backend:8080
+	}
+
+	handle {
+		reverse_proxy frontend:80
+	}
+}

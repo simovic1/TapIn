@@ -2,6 +2,8 @@
 #
 #   docker compose up -d                 -> PostgreSQL + Mailpit (run backend/frontend from source, see README)
 #   docker compose --profile app up -d --build   -> also builds and runs backend + frontend containers
+#   SESSION_COOKIE_SECURE=true docker compose --profile app --profile https up -d --build
+#                                                -> plus a TLS reverse proxy on https://localhost:8443 (Caddy)
 #
 # Values come from .env (copy .env.example). Defaults below match backend/src/main/resources/application-local.yml,
 # so a fresh clone works even without a .env file.
@@ -54,6 +56,8 @@ services:
       CLUB_NAME: ${CLUB_NAME:-BJJ klub (local)}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@tapin.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-local-dev-admin-password}
+      # true when served through the HTTPS proxy below (as in production)
+      SERVER_SERVLET_SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
     ports:
       - "8080:8080"
 
@@ -66,5 +70,19 @@ services:
     ports:
       - "3000:80"
 
+  # Local TLS termination in front of frontend + backend, like the production reverse proxy.
+  proxy:
+    profiles: [https]
+    image: caddy:2.11.7-alpine
+    depends_on:
+      - backend
+      - frontend
+    ports:
+      - "8443:8443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+
 volumes:
   db-data:
+  caddy-data:

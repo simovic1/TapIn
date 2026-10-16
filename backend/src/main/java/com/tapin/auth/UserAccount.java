@@ -71,4 +71,6 @@ class UserAccount {
     String getLastName() { return lastName; }
     String getPasswordHash() { return passwordHash; }
     AccountStatus getAccountStatus() { return accountStatus; }
+    String getPhone() { return phone; }
+    long getVersion() { return version; }
 }

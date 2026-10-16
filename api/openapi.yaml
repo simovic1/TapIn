@@ -150,13 +150,19 @@ paths:
       tags: [Auth]
       operationId: logout
       summary: Odjava (poništava sesiju)
+      description: |
+        Invalidira sesiju na poslužitelju, briše cookie `TAPIN_SESSION` i CSRF token. Idempotentno: bez aktivne
+        sesije također vraća `204`. Zahtijeva CSRF token kao i svaki POST.
       security:
-        - sessionCookie: []
-          csrfToken: []
-      x-roles: [ANY]
+        - csrfToken: []
+      x-roles: [PUBLIC]
       responses:
-        '204': { description: Odjavljen }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+        '204':
+          description: Odjavljen
+          headers:
+            Set-Cookie:
+              description: '`TAPIN_SESSION=; Max-Age=0; ...` (brisanje cookieja sesije)'
+              schema: { type: string }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /auth/invitations/preview:

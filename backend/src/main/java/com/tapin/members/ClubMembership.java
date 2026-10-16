@@ -96,5 +96,7 @@ class ClubMembership {
     Long getId() { return id; }
     Long getUserId() { return userId; }
     MembershipStatus getStatus() { return status; }
+    LocalDate getJoinedOn() { return joinedOn; }
+    Club getClub() { return club; }
     Set<Role> getRoles() { return Set.copyOf(roles); }
 }

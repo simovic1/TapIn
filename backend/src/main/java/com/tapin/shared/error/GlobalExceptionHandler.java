@@ -32,6 +32,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    @ExceptionHandler(RateLimitedException.class)
+    ResponseEntity<ProblemDetail> handleRateLimited(RateLimitedException ex, HttpServletRequest request) {
+        return ResponseEntity.status(ex.errorCode().status())
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.retryAfterSeconds()))
+                .body(problem(ex.errorCode(), ex.getMessage(), request));
+    }
+
     @ExceptionHandler(ApiException.class)
     ProblemDetail handleApi(ApiException ex, HttpServletRequest request) {
         ProblemDetail problem = problem(ex.errorCode(), ex.getMessage(), request);

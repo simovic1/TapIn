@@ -7,8 +7,8 @@ moduli. Svaki modul je Java paket `com.tapin.<modul>` i ima parnjak u `frontend/
 
 | Modul (backend) | Odgovornost | Tablice (vlasništvo) | API (`/api/v1`) | Frontend feature | Faza |
 |---|---|---|---|---|---|
-| `shared` | Security, greške (`problem+json`), OpenAPI, sat/vremenska zona, zajednički API tipovi | — | `/system/**` | `lib/`, `components/` | 0 |
-| `auth` | Login/logout (session), pozivnice, reset lozinke, hash lozinki i tokena | `users`, `invitations`, `password_reset_tokens` | `/auth/**`, `/me` | `features/auth` | 1 |
+| `shared` | Greške (`problem+json`), OpenAPI, sat/vremenska zona, raspoređivanje, zajednički API tipovi | — | `/system/**` | `lib/`, `components/` | 0 |
+| `auth` | Spring Security konfiguracija, login/logout (sesija, CSRF), autorizacija endpointa, pozivnice, reset lozinke, hash lozinki i tokena | `users`, `invitations`, `password_reset_tokens` | `/auth/**`, `/me` | `features/auth` | 1 |
 | `members` | Klub, članstvo, uloge, status članstva, profil | `clubs`, `club_memberships`, `membership_roles`, `membership_status_events` | `/members/**` | `features/members` | 1 |
 | `scheduling` | Ponavljajuća pravila, materijalizacija termina, izmjene/otkazivanja, treneri termina | `recurring_schedules`, `training_sessions`, `session_coaches` | `/trainings/**`, `/recurring-schedules/**` | `features/trainings` | 2 |
 | `registrations` | Prijava/otkazivanje prijave člana | `training_registrations`, `registration_events` | `/trainings/{id}/my-registration` | `features/trainings` | 2 |
@@ -39,7 +39,8 @@ u CODEOWNERS-u i u ovoj tablici.
    reporting      -> (čita sve, nitko ne ovisi o njemu)  <---------------------+
    ```
 
-   `shared` ne ovisi ni o jednom poslovnom modulu.
+   `shared` ne ovisi ni o jednom poslovnom modulu. `auth` ne ovisi o `members`: uloge i članstvo dobiva preko
+   SPI sučelja `MembershipAuthorityLookup` koje implementira `members`.
 6. **Javno vs. interno unutar modula**: kontroleri, DTO-i i servis koji drugi moduli koriste su `public`;
    entiteti, repozitoriji i pomoćne klase su package-private gdje god je moguće. Drugi moduli ne importaju
    JPA entitete tuđeg modula — razmjenjuju ID-jeve i DTO/record tipove.

@@ -50,7 +50,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Odjava (poništava sesiju) */
+        /**
+         * Odjava (poništava sesiju)
+         * @description Invalidira sesiju na poslužitelju, briše cookie `TAPIN_SESSION` i CSRF token. Idempotentno: bez aktivne
+         *     sesije također vraća `204`. Zahtijeva CSRF token kao i svaki POST.
+         */
         post: operations["logout"];
         delete?: never;
         options?: never;
@@ -1724,11 +1728,12 @@ export interface operations {
             /** @description Odjavljen */
             204: {
                 headers: {
+                    /** @description `TAPIN_SESSION=; Max-Age=0; ...` (brisanje cookieja sesije) */
+                    "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };
     };

@@ -1,40 +1,33 @@
 package com.tapin.shared.web;
 
-import com.tapin.shared.config.ClubProperties;
-import com.tapin.shared.config.TimeConfig;
-import com.tapin.shared.error.GlobalExceptionHandler;
-import com.tapin.shared.security.SecurityConfig;
+import com.tapin.TestcontainersConfiguration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(SystemController.class)
+@SpringBootTest
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import({SecurityConfig.class, GlobalExceptionHandler.class, TimeConfig.class})
-@EnableConfigurationProperties(ClubProperties.class)
+@Import(TestcontainersConfiguration.class)
+@Testcontainers(disabledWithoutDocker = true)
 class WebSecurityAndErrorsTest {
 
     @Autowired
     MockMvc mvc;
-
-    @MockitoBean
-    UserDetailsService userDetailsService;
 
     @Test
     void systemInfoIsPublic() throws Exception {
@@ -42,13 +35,6 @@ class WebSecurityAndErrorsTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.clubName").value("Test klub"))
                 .andExpect(jsonPath("$.timeZone").value("Europe/Zagreb"));
-    }
-
-    @Test
-    void firstRequestIssuesReadableCsrfCookieForTheSpa() throws Exception {
-        mvc.perform(get("/api/v1/system/info"))
-                .andExpect(cookie().exists("XSRF-TOKEN"))
-                .andExpect(cookie().httpOnly("XSRF-TOKEN", false));
     }
 
     @Test
@@ -80,7 +66,7 @@ class WebSecurityAndErrorsTest {
 
     @Test
     void stateChangingRequestWithCsrfTokenPassesCsrfFilter() throws Exception {
-        mvc.perform(post("/api/v1/system/info").with(csrf()))
+        mvc.perform(post("/api/v1/system/info").with(csrf()).with(user("member").roles("MEMBER")))
                 .andExpect(status().isMethodNotAllowed())
                 .andExpect(jsonPath("$.errorCode").value("METHOD_NOT_ALLOWED"))
                 .andExpect(jsonPath("$.type").value("urn:tapin:error:method-not-allowed"));

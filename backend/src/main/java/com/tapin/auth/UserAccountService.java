@@ -36,6 +36,16 @@ public class UserAccountService {
         return toRef(user);
     }
 
+    @Transactional(readOnly = true)
+    public Optional<UserProfile> findProfile(long userId) {
+        return users.findById(userId).map(u -> new UserProfile(u.getId(), u.getEmail(), u.getFirstName(),
+                u.getLastName(), u.getPhone(), u.getAccountStatus(), u.getVersion()));
+    }
+
+    public record UserProfile(long userId, String email, String firstName, String lastName, String phone,
+                              AccountStatus accountStatus, long version) {
+    }
+
     private static UserRef toRef(UserAccount user) {
         return new UserRef(user.getId(), user.getEmail(), user.getAccountStatus());
     }

@@ -102,7 +102,7 @@ npm run dev
 
 Aplikacija: <http://localhost:5173>. Vite proxy prosljeđuje `/api`, `/actuator` i Swagger na backend (`:8080`),
 pa su SPA i API na istom originu – session i CSRF cookieji rade kao u produkciji. Bez prijave aplikacija vodi
-na `/prijava`. (Endpoint za prijavu stiže u Fazi 1 – do tada se cijeli tok isprobava protiv mocka, vidi dolje.)
+na `/prijava`; lokalno se prijavljuješ s `admin@tapin.local` / `local-dev-admin-password`.
 
 ### Frontend bez backenda (mock iz API ugovora)
 
@@ -120,6 +120,14 @@ docker compose --profile app up -d --build
 ```
 
 Frontend (nginx + proxy na backend): <http://localhost:3000>.
+
+S lokalnim HTTPS-om kao u produkciji (Caddy, `Secure` kolačići) – vidi [sigurnost](docs/architecture/security.md):
+
+```bash
+SESSION_COOKIE_SECURE=true docker compose --profile app --profile https up -d --build
+```
+
+Aplikacija: <https://localhost:8443> (preglednik upozorava na lokalni certifikat).
 
 ## Profili i tajne
 
@@ -156,6 +164,7 @@ CI (`.github/workflows/ci.yml`) pokreće sve provjere na svaki push i pull reque
 - [Moduli i vlasništvo](docs/architecture/modules.md) – odgovornosti, tablice, API i smjer ovisnosti po modulu
 - [Flyway migracije](docs/architecture/database-migrations.md) – imenovanje, dogovoreni redoslijed, SQL konvencije, bootstrap administratora
 - [API ugovor](docs/architecture/api-contract.md) – OpenAPI, mock, generirani tipovi, ključne odluke
+- [Autentikacija i autorizacija](docs/architecture/security.md) – sesija, CSRF, kolačići, matrica ovlasti, HTTPS provjera
 - [E-mail obavijesti](docs/architecture/notifications.md) – transactional outbox, worker, retry, deduplikacija, garancija dostave
 - [Frontend osnova](docs/architecture/frontend.md) – sesija i CSRF, navigacija po ulogama, komponente, pristupačnost
 - [Konvencije koda](docs/architecture/conventions.md) – imenovanje u backendu, API-ju, frontendu i gitu
