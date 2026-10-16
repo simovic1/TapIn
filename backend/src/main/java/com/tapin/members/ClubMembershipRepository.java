@@ -18,4 +18,9 @@ interface ClubMembershipRepository extends JpaRepository<ClubMembership, Long> {
     @Query("select m from ClubMembership m join m.roles r "
             + "where m.status = com.tapin.members.MembershipStatus.ACTIVE and r = com.tapin.members.Role.ADMIN")
     List<ClubMembership> findActiveAdmins();
+
+    @Query("select distinct m from ClubMembership m join m.roles r "
+            + "where m.status = com.tapin.members.MembershipStatus.ACTIVE "
+            + "and r in (com.tapin.members.Role.TRAINER, com.tapin.members.Role.ADMIN)")
+    List<ClubMembership> findActiveStaff();
 }

@@ -460,7 +460,9 @@ export interface paths {
         };
         /**
          * Vidljivi termini u razdoblju
-         * @description Interval `[from, to)` najviše 92 dana; bez parametara: od sada sljedećih 14 dana. Sortirano po `startAt`.
+         * @description Interval `[from, to)` (po `startAt`) najviše 92 dana; bez parametara: od sada sljedećih 14 dana. Sortirano
+         *     po `startAt`. Uključuje i otkazane termine (filtar `status`). Termin prelazi iz `SCHEDULED` u `HELD`
+         *     automatski nakon završetka.
          *     Polja `myRegistrationStatus`/`myAttendanceStatus` odnose se na članstvo prijavljenog korisnika.
          */
         get: operations["listTrainings"];
@@ -471,6 +473,27 @@ export interface paths {
          *     Preklapanje s aktivnim terminom → `409 TRAINING_OVERLAP`.
          */
         post: operations["createTraining"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trainings/coaches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Treneri koje je moguće dodijeliti terminu
+         * @description Aktivna članstva s ulogom `TRAINER` ili `ADMIN`, sortirano po prezimenu i imenu – izbor za
+         *     `coachMembershipIds`. Dopuna §11.3 (ograničen popis, bez paginacije).
+         */
+        get: operations["listTrainingCoaches"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -496,7 +519,13 @@ export interface paths {
         /**
          * Pomicanje ili izmjena pojedinačnog termina
          * @description Izmijenjeni termin iz pravila ostaje vezan uz originalni `occurrenceDate` i ne nastaje ponovno pri
-         *     generiranju (AC-12). Promjena vremena šalje obavijest prijavljenima (`notificationStatus=QUEUED`).
+         *     generiranju (AC-12); kasnije izmjene vremena pravila ga više ne pomiču. Promjena početka šalje obavijest
+         *     prijavljenima (`notificationStatus=QUEUED`). Novi početak mora biti u budućnosti, a preklapanje s drugim
+         *     aktivnim terminom → `409 TRAINING_OVERLAP`. Treneri termina (`coachMembershipIds`) moraju biti aktivni
+         *     treneri ili administratori (inače `422`); dodjela je informativna – svaki trener smije uređivati svaki termin.
+         *     Odluka D-03: termin koji je započeo ili je `HELD` ne može se pomaknuti (`422 BUSINESS_RULE_VIOLATION`), a
+         *     naslov, napomena i treneri ostaju izmjenjivi. Otkazani termin se ne mijenja (`422 TRAINING_CANCELLED`).
+         *     Bez stvarne promjene: `changed=false`, `notificationStatus=NOT_REQUIRED`.
          */
         patch: operations["updateTraining"];
         trace?: never;
@@ -512,7 +541,9 @@ export interface paths {
         put?: never;
         /**
          * Otkazivanje termina
-         * @description Ne briše ponavljajuće pravilo. Prijavljeni dobivaju obavijest (AC-11). Ponovno otkazivanje je idempotentno.
+         * @description Ne briše ponavljajuće pravilo, prijave ni povijest promjena; otkazani termin se ne broji u statistici.
+         *     Prijavljeni dobivaju obavijest (AC-11). Ponovno otkazivanje je idempotentno (`changed=false`).
+         *     Odluka D-03: termin koji je započeo ili je `HELD` ne može se otkazati (`422 BUSINESS_RULE_VIOLATION`).
          */
         post: operations["cancelTraining"];
         delete?: never;
@@ -554,7 +585,11 @@ export interface paths {
         head?: never;
         /**
          * Izmjena budućeg rasporeda
-         * @description Djeluje samo na buduće, još nematerijalizirane ili neizmijenjene termine.
+         * @description Djeluje samo na budućnost; prošli termini i `validFrom` se ne mijenjaju. Odluka D-02: već generirani budući
+         *     termini pravila koji su `SCHEDULED`, još nisu počeli i nisu pojedinačno pomaknuti prate novo vrijeme
+         *     (prijavljeni dobivaju obavijest o promjeni termina); termini koje pravilo više ne obuhvaća (`validTo`,
+         *     `enabled=false`) se **otkazuju**, ne brišu. Pojedinačno izmijenjeni i otkazani termini ostaju nepromijenjeni.
+         *     Preklapanje s drugim pravilom istog dana → `409 TRAINING_OVERLAP`.
          */
         patch: operations["updateRecurringSchedule"];
         trace?: never;
@@ -1124,6 +1159,9 @@ export interface components {
             userId: components["schemas"]["UserId"];
             firstName: string;
             lastName: string;
+        };
+        CoachList: {
+            items: components["schemas"]["CoachRef"][];
         };
         TrainingSummary: {
             trainingId: components["schemas"]["TrainingId"];
@@ -2403,6 +2441,28 @@ export interface operations {
             422: components["responses"]["UnprocessableContent"];
         };
     };
+    listTrainingCoaches: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoachList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
     getTraining: {
         parameters: {
             query?: never;
@@ -2488,6 +2548,7 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableContent"];
         };
     };
     listRecurringSchedules: {

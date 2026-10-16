@@ -715,7 +715,9 @@ paths:
       operationId: listTrainings
       summary: Vidljivi termini u razdoblju
       description: |
-        Interval `[from, to)` najviše 92 dana; bez parametara: od sada sljedećih 14 dana. Sortirano po `startAt`.
+        Interval `[from, to)` (po `startAt`) najviše 92 dana; bez parametara: od sada sljedećih 14 dana. Sortirano
+        po `startAt`. Uključuje i otkazane termine (filtar `status`). Termin prelazi iz `SCHEDULED` u `HELD`
+        automatski nakon završetka.
         Polja `myRegistrationStatus`/`myAttendanceStatus` odnose se na članstvo prijavljenog korisnika.
       x-roles: [ANY]
       parameters:
@@ -771,6 +773,25 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableContent' }
 
+  /trainings/coaches:
+    get:
+      tags: [Trainings]
+      operationId: listTrainingCoaches
+      summary: Treneri koje je moguće dodijeliti terminu
+      description: |
+        Aktivna članstva s ulogom `TRAINER` ili `ADMIN`, sortirano po prezimenu i imenu – izbor za
+        `coachMembershipIds`. Dopuna §11.3 (ograničen popis, bez paginacije).
+      x-spec-addition: true
+      x-roles: [TRAINER, ADMIN]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CoachList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /trainings/{trainingId}:
     parameters:
       - $ref: '#/components/parameters/TrainingId'
@@ -793,7 +814,13 @@ paths:
       summary: Pomicanje ili izmjena pojedinačnog termina
       description: |
         Izmijenjeni termin iz pravila ostaje vezan uz originalni `occurrenceDate` i ne nastaje ponovno pri
-        generiranju (AC-12). Promjena vremena šalje obavijest prijavljenima (`notificationStatus=QUEUED`).
+        generiranju (AC-12); kasnije izmjene vremena pravila ga više ne pomiču. Promjena početka šalje obavijest
+        prijavljenima (`notificationStatus=QUEUED`). Novi početak mora biti u budućnosti, a preklapanje s drugim
+        aktivnim terminom → `409 TRAINING_OVERLAP`. Treneri termina (`coachMembershipIds`) moraju biti aktivni
+        treneri ili administratori (inače `422`); dodjela je informativna – svaki trener smije uređivati svaki termin.
+        Odluka D-03: termin koji je započeo ili je `HELD` ne može se pomaknuti (`422 BUSINESS_RULE_VIOLATION`), a
+        naslov, napomena i treneri ostaju izmjenjivi. Otkazani termin se ne mijenja (`422 TRAINING_CANCELLED`).
+        Bez stvarne promjene: `changed=false`, `notificationStatus=NOT_REQUIRED`.
       security:
         - sessionCookie: []
           csrfToken: []
@@ -821,7 +848,10 @@ paths:
       tags: [Trainings]
       operationId: cancelTraining
       summary: Otkazivanje termina
-      description: Ne briše ponavljajuće pravilo. Prijavljeni dobivaju obavijest (AC-11). Ponovno otkazivanje je idempotentno.
+      description: |
+        Ne briše ponavljajuće pravilo, prijave ni povijest promjena; otkazani termin se ne broji u statistici.
+        Prijavljeni dobivaju obavijest (AC-11). Ponovno otkazivanje je idempotentno (`changed=false`).
+        Odluka D-03: termin koji je započeo ili je `HELD` ne može se otkazati (`422 BUSINESS_RULE_VIOLATION`).
       security:
         - sessionCookie: []
           csrfToken: []
@@ -844,6 +874,7 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
 
   /recurring-schedules:
     get:
@@ -1966,6 +1997,13 @@ components:
         userId: { $ref: '#/components/schemas/UserId' }
         firstName: { type: string }
         lastName: { type: string }
+    CoachList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CoachRef' }
     TrainingSummary:
       type: object
       required: [trainingId, scheduleId, occurrenceDate, title, startAt, endAt, localDate, status, coaches, myRegistrationStatus, myAttendanceStatus, canRegister, canCancelRegistration, version]

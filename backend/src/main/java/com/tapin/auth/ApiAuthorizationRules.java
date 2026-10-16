@@ -58,6 +58,7 @@ final class ApiAuthorizationRules {
                         API + "/members/*/attendance").hasAnyRole(STAFF)
 
                 // ---- TRAINER or ADMIN: schedule management, roster, attendance, reports
+                .requestMatchers(HttpMethod.GET, API + "/trainings/coaches").hasAnyRole(STAFF)
                 .requestMatchers(HttpMethod.POST, API + "/trainings").hasAnyRole(STAFF)
                 .requestMatchers(HttpMethod.PATCH, API + "/trainings/*").hasAnyRole(STAFF)
                 .requestMatchers(HttpMethod.POST, API + "/trainings/*/cancel").hasAnyRole(STAFF)

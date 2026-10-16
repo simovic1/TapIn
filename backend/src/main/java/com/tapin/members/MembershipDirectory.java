@@ -52,6 +52,16 @@ public class MembershipDirectory {
         return new ClubRef(club.getId(), club.getName(), club.getTimeZone());
     }
 
+    /** Active memberships with an operational role (TRAINER or ADMIN), e.g. candidates for session coaches. */
+    @Transactional(readOnly = true)
+    public List<MemberRef> findActiveStaff() {
+        List<Long> ids = memberships.findActiveStaff().stream().map(ClubMembership::getId).toList();
+        return findAll(ids).values().stream()
+                .sorted(java.util.Comparator.comparing(MemberRef::lastName, String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(MemberRef::firstName, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+    }
+
     /** @return memberships by id in the order requested; unknown ids are absent from the map */
     @Transactional(readOnly = true)
     public Map<Long, MemberRef> findAll(Collection<Long> membershipIds) {
