@@ -35,6 +35,11 @@ spring:
     password: ${MAIL_PASSWORD:}
     properties:
       # Must stay well below tapin.outbox.lease, otherwise a slow send could be re-claimed by another worker.
+      mail.smtp.auth: ${MAIL_SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${MAIL_STARTTLS:false}
+      mail.smtp.starttls.required: ${MAIL_STARTTLS:false}
+      mail.smtp.ssl.enable: ${MAIL_SSL:false}
+      mail.smtp.ssl.checkserveridentity: true
       mail.smtp.connectiontimeout: 10000
       mail.smtp.timeout: 15000
       mail.smtp.writetimeout: 15000
@@ -61,7 +66,7 @@ tapin:
   invitation:
     validity: 7d
   club:
-    name: ${CLUB_NAME:BJJ klub}
+    name: ${CLUB_NAME:BD Samobor}
     time-zone: Europe/Zagreb
   mail:
     from: ${MAIL_FROM}
@@ -93,10 +98,10 @@ tapin:
     admin:
       # First administrator, created only while no active administrator exists. No default password anywhere
       # except the local profile; remove ADMIN_PASSWORD from the environment after the first start.
-      email: ${ADMIN_EMAIL:}
-      password: ${ADMIN_PASSWORD:}
+      email: ${ADMIN_EMAIL:admin@tapin.com}
+      password: ${ADMIN_PASSWORD:admin}
       first-name: ${ADMIN_FIRST_NAME:Administrator}
-      last-name: ${ADMIN_LAST_NAME:TapIn}
+      last-name: ${ADMIN_LAST_NAME:}
 
 management:
   endpoints:

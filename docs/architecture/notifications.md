@@ -219,3 +219,23 @@ public AttendanceResult setAttendance(...) {
 
 Payload sadrži vrijednosti spremne za prikaz (datumi već formatirani za Europe/Zagreb). Za poveznice s tokenom
 koristiti `.withSecret()`.
+
+
+## Stvarna SMTP dostava iz lokalnog Dockera
+
+Compose prema zadanim vrijednostima koristi Mailpit. Za dostavu u stvarne pretince postavi
+`MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` u lokalni `.env` (git-ignored).
+Koristi vjerodajnice SMTP pružatelja i adresu pošiljatelja koju taj pružatelj dopušta.
+Za autentikaciju postavi `MAIL_SMTP_AUTH=true`. Za STARTTLS postavi `MAIL_STARTTLS=true`
+i `MAIL_SSL=false`; za implicitni TLS koristi `MAIL_SSL=true` i `MAIL_STARTTLS=false`.
+Port mora odgovarati postavkama pružatelja. STARTTLS je obvezan kada je uključen; provjerava se
+identitet TLS poslužitelja. Tajne se ne upisuju u primjer konfiguracije ni u Git.
+
+Nakon konfiguracije: `docker compose --profile app up -d --build backend`.
+Kod pokretanja backenda iz Maven/IDE-a varijable treba postaviti u njegovom okruženju;
+Spring sam ne učitava korijenski `.env`.
+
+`APP_BASE_URL` mora biti adresa na kojoj primatelj može otvoriti aplikaciju.
+`http://localhost:3000` nije dostupan članovima na drugim računalima.
+Promjena SMTP-a ne šalje ponovno već obrađene (`SENT`) poruke iz Mailpita.
+Za pozivnicu koristi radnju ponovnog slanja, koja izdaje novu poveznicu.
