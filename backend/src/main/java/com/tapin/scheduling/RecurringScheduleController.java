@@ -1,5 +1,6 @@
 package com.tapin.scheduling;
 
+import com.fasterxml.jackson.annotation.JsonSetter;
 import com.tapin.auth.AuthenticatedUser;
 import com.tapin.scheduling.RecurringScheduleService.CreateCommand;
 import com.tapin.scheduling.RecurringScheduleService.ScheduleView;
@@ -55,13 +56,27 @@ class RecurringScheduleController {
             Boolean enabled) {
     }
 
-    /** Absent field = unchanged; {@code "validTo": null} removes the end date. */
-    record UpdateRecurringScheduleRequest(
-            @NotNull @Min(0) Long expectedVersion,
-            @Pattern(regexp = LOCAL_TIME, message = LOCAL_TIME_MESSAGE) String startTime,
-            @Pattern(regexp = LOCAL_TIME, message = LOCAL_TIME_MESSAGE) String endTime,
-            Optional<LocalDate> validTo,
-            Boolean enabled) {
+    /**
+     * Absent field = unchanged; {@code "validTo": null} removes the end date. A class with a setter (not a record
+     * with {@code Optional}) because Jackson maps an absent {@code Optional} record component to
+     * {@code Optional.empty()}, which would be indistinguishable from an explicit null.
+     */
+    static final class UpdateRecurringScheduleRequest {
+        @NotNull @Min(0) public Long expectedVersion;
+        @Pattern(regexp = LOCAL_TIME, message = LOCAL_TIME_MESSAGE) public String startTime;
+        @Pattern(regexp = LOCAL_TIME, message = LOCAL_TIME_MESSAGE) public String endTime;
+        public Boolean enabled;
+        private Optional<LocalDate> validTo;
+
+        @JsonSetter("validTo")
+        void setValidTo(LocalDate value) {
+            validTo = Optional.ofNullable(value);
+        }
+
+        /** {@code null} = not sent, empty = sent as null. */
+        Optional<LocalDate> validTo() {
+            return validTo;
+        }
     }
 
     @Operation(summary = "Pravila rasporeda")
@@ -85,9 +100,9 @@ class RecurringScheduleController {
     ScheduleView update(@AuthenticationPrincipal AuthenticatedUser actor, @PathVariable long scheduleId,
                                      @Valid @RequestBody UpdateRecurringScheduleRequest request) {
         return service.update(actor, scheduleId, new UpdateCommand(
-                request.expectedVersion(),
-                request.startTime() != null ? LocalTime.parse(request.startTime()) : null,
-                request.endTime() != null ? LocalTime.parse(request.endTime()) : null,
-                request.validTo(), request.enabled()));
+                request.expectedVersion,
+                request.startTime != null ? LocalTime.parse(request.startTime) : null,
+                request.endTime != null ? LocalTime.parse(request.endTime) : null,
+                request.validTo(), request.enabled));
     }
 }

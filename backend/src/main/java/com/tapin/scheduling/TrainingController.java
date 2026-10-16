@@ -1,5 +1,6 @@
 package com.tapin.scheduling;
 
+import com.fasterxml.jackson.annotation.JsonSetter;
 import com.tapin.auth.AuthenticatedUser;
 import com.tapin.scheduling.TrainingService.CreateCommand;
 import com.tapin.scheduling.TrainingService.MutationResult;
@@ -53,14 +54,39 @@ class TrainingController {
             @Size(max = 500) String note) {
     }
 
-    /** Absent field = unchanged; {@code null} title/note clears it. */
-    record UpdateTrainingRequest(
-            @NotNull @Min(0) Long expectedVersion,
-            Instant startAt,
-            Instant endAt,
-            Optional<@Size(max = 150) String> title,
-            Set<Long> coachMembershipIds,
-            Optional<@Size(max = 500) String> note) {
+    /**
+     * Absent field = unchanged; {@code null} title/note clears it. Setters record which nullable fields were sent
+     * (an absent {@code Optional} record component would arrive as {@code Optional.empty()}, i.e. "clear").
+     */
+    static final class UpdateTrainingRequest {
+        @NotNull @Min(0) public Long expectedVersion;
+        public Instant startAt;
+        public Instant endAt;
+        public Set<Long> coachMembershipIds;
+        @Size(max = 150) private String title;
+        @Size(max = 500) private String note;
+        private boolean titleSent;
+        private boolean noteSent;
+
+        @JsonSetter("title")
+        void setTitle(String value) {
+            title = value;
+            titleSent = true;
+        }
+
+        @JsonSetter("note")
+        void setNote(String value) {
+            note = value;
+            noteSent = true;
+        }
+
+        Optional<String> title() {
+            return titleSent ? Optional.ofNullable(title) : null;
+        }
+
+        Optional<String> note() {
+            return noteSent ? Optional.ofNullable(note) : null;
+        }
     }
 
     record CancelTrainingRequest(@NotNull @Min(0) Long expectedVersion, @Size(max = 500) String reason) {
@@ -105,8 +131,8 @@ class TrainingController {
     @PatchMapping("/{trainingId}")
     MutationResult update(@AuthenticationPrincipal AuthenticatedUser actor, @PathVariable long trainingId,
                           @Valid @RequestBody UpdateTrainingRequest request) {
-        return service.update(actor, trainingId, new UpdateCommand(request.expectedVersion(), request.startAt(),
-                request.endAt(), request.title(), request.coachMembershipIds(), request.note()));
+        return service.update(actor, trainingId, new UpdateCommand(request.expectedVersion, request.startAt,
+                request.endAt, request.title(), request.coachMembershipIds, request.note()));
     }
 
     @Operation(summary = "Otkazivanje termina")

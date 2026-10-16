@@ -306,9 +306,13 @@ class RecurringScheduleIntegrationTest extends SchedulingTestSupport {
         MockHttpSession trainer = trainer();
         patchJson(trainer, "/api/v1/recurring-schedules/" + tuesdayRule,
                 Map.of("expectedVersion", 0, "validTo", "2026-11-01")).andExpect(status().isOk());
+        // A field that is not sent stays as it is.
+        patchJson(trainer, "/api/v1/recurring-schedules/" + tuesdayRule,
+                Map.of("expectedVersion", 1, "endTime", "20:15")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.validTo").value("2026-11-01"));
 
         Map<String, Object> clear = new HashMap<>();
-        clear.put("expectedVersion", 1);
+        clear.put("expectedVersion", 2);
         clear.put("validTo", null);
         patchJson(trainer, "/api/v1/recurring-schedules/" + tuesdayRule, clear)
                 .andExpect(status().isOk())

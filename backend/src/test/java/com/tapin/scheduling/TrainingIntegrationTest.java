@@ -319,10 +319,16 @@ class TrainingIntegrationTest extends SchedulingTestSupport {
                 .andExpect(jsonPath("$.errorCode").value("VERSION_CONFLICT"))
                 .andExpect(jsonPath("$.currentState.title").value("A"))
                 .andExpect(jsonPath("$.currentState.version").value(1));
+        // Fields that are not sent stay as they are; an explicit null clears.
+        patchJson(trainer, "/api/v1/trainings/" + id, Map.of("expectedVersion", 1, "note", "N"))
+                .andExpect(jsonPath("$.training.title").value("A"))
+                .andExpect(jsonPath("$.training.note").value("N"));
         Map<String, Object> clear = new HashMap<>();
-        clear.put("expectedVersion", 1);
+        clear.put("expectedVersion", 2);
         clear.put("title", null);
-        patchJson(trainer, "/api/v1/trainings/" + id, clear).andExpect(jsonPath("$.training.title").isEmpty());
+        patchJson(trainer, "/api/v1/trainings/" + id, clear)
+                .andExpect(jsonPath("$.training.title").isEmpty())
+                .andExpect(jsonPath("$.training.note").value("N"));
     }
 
     // ---------------------------------------------------------------- cancelling
