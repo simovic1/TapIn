@@ -4,14 +4,6 @@ import { describe, expect, it } from 'vitest';
 import { sessionExpiry } from '../lib/session/sessionExpiry';
 import { json, makeUser, mockApi, problem, renderApp } from '../test/utils';
 
-const systemInfo = {
-  application: 'TapIn',
-  version: '1.0',
-  clubName: 'BJJ klub',
-  timeZone: 'Europe/Zagreb',
-  serverTime: '2026-10-20T14:00:00Z',
-};
-
 describe('session, navigation and guards', () => {
   it('redirects to the login page when nobody is signed in', async () => {
     mockApi({ 'GET /api/v1/me': () => problem(401, 'UNAUTHENTICATED') });
@@ -61,7 +53,7 @@ describe('session, navigation and guards', () => {
   it('gives a user with several roles a single navigation matching all of them', async () => {
     mockApi({
       'GET /api/v1/me': () => json(200, makeUser(['MEMBER', 'TRAINER'])),
-      'GET /api/v1/system/info': () => json(200, systemInfo),
+      'GET /api/v1/trainings': () => json(200, { items: [] }),
     });
 
     renderApp('/');
@@ -89,9 +81,9 @@ describe('session, navigation and guards', () => {
     let signedIn = true;
     mockApi({
       'GET /api/v1/me': () => (signedIn ? json(200, makeUser(['MEMBER'])) : problem(401, 'UNAUTHENTICATED')),
-      'GET /api/v1/system/info': () => {
+      'GET /api/v1/trainings': () => {
         signedIn = false; // the server-side session disappears
-        return problem(401, 'UNAUTHENTICATED', '/api/v1/system/info');
+        return problem(401, 'UNAUTHENTICATED', '/api/v1/trainings');
       },
     });
 
@@ -106,7 +98,7 @@ describe('session, navigation and guards', () => {
     const user = userEvent.setup();
     const fetchMock = mockApi({
       'GET /api/v1/me': () => json(200, makeUser(['MEMBER'])),
-      'GET /api/v1/system/info': () => json(200, systemInfo),
+      'GET /api/v1/trainings': () => json(200, { items: [] }),
       'POST /api/v1/auth/logout': () => new Response(null, { status: 204 }),
     });
 

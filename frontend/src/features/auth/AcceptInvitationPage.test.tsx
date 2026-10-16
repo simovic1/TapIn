@@ -11,8 +11,6 @@ const preview = {
   clubName: 'BJJ klub',
   expiresAt: '2026-10-27T10:00:00Z',
 };
-const systemInfo = { application: 'TapIn', version: '1', clubName: 'BJJ klub', timeZone: 'Europe/Zagreb', serverTime: '2026-10-20T10:00:00Z' };
-
 describe('AcceptInvitationPage', () => {
   it('reads the token from the URL fragment, activates the account and signs the user in', async () => {
     const user = userEvent.setup();
@@ -21,7 +19,7 @@ describe('AcceptInvitationPage', () => {
       'GET /api/v1/me': () => problem(401, 'UNAUTHENTICATED'),
       'POST /api/v1/auth/invitations/preview': () => json(200, preview),
       'POST /api/v1/auth/invitations/accept': () => json(200, makeUser(['MEMBER'], { firstName: 'Nova', email: 'nova@klub.hr' })),
-      'GET /api/v1/system/info': () => json(200, systemInfo),
+      'GET /api/v1/trainings': () => json(200, { items: [] }),
     });
 
     const { router } = renderApp(`/pozivnica#${TOKEN}`);

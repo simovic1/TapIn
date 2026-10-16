@@ -39,6 +39,17 @@ frontend/src/
 - Obrasci onemogućuju slanje dok zahtjev traje i prikazuju razumljive poruke za nevaljanu/isteklu poveznicu,
   neispravnu lozinku, `429` i nedostupan poslužitelj. Prije slanja pribavlja se CSRF cookie preko `/me`.
 
+## Raspored i treninzi (BJJ-15, BJJ-16)
+
+- Sva vremena dolaze u UTC i prikazuju se u `Europe/Zagreb` (`lib/format.ts`: `formatLongDate`, `formatTimeRange`,
+  `toClubParts`); unos datuma i vremena u obrascima pretvara se u UTC s `clubDateTimeToIso` (DST-ispravno, bez
+  biblioteka). Grupiranje po danu koristi `localDate` s poslužitelja.
+- Početna (`/`) prikazuje sljedeći i drugi sljedeći neotkazani trening te otkazane termine prije njih; `/treninzi` je
+  kalendar po mjesecima (`?mjesec=YYYY-MM`, jedan upit `[1. u mjesecu 00:00, 1. sljedećeg 00:00)` po zagrebačkom
+  vremenu); `/treninzi/:id` je detalj. Otkazani termini imaju tekstualnu oznaku „Otkazan”, precrtano vrijeme i razlog.
+- Član nikad ne vidi tko je prijavljen; `registeredCount` dolazi i prikazuje se samo trenerima/administratorima.
+- Prijava na trening dolazi u BJJ-18 (`myRegistrationStatus` se zasad samo prikazuje).
+
 ## Navigacija i ovlasti
 
 - `app/navigation.ts` je jedini izvor stavki izbornika; svaka stavka ima `roles`. Korisnik s više uloga dobiva
