@@ -49,6 +49,15 @@ frontend/src/
   vremenu); `/treninzi/:id` je detalj. Otkazani termini imaju tekstualnu oznaku „Otkazan”, precrtano vrijeme i razlog.
 - Član nikad ne vidi tko je prijavljen; `registeredCount` dolazi i prikazuje se samo trenerima/administratorima.
 - Prijava na trening dolazi u BJJ-18 (`myRegistrationStatus` se zasad samo prikazuje).
+- Trener/admin (BJJ-16): `/treninzi/novi` (dodatni ili povijesni trening), `/treninzi/:id/uredi` (**samo taj
+  termin**; za termin iz pravila jasno piše da ostali termini ostaju), otkazivanje na detalju uz prikaz što se
+  otkazuje (datum, vrijeme, broj prijavljenih, „tjedni raspored ostaje”) i `/treninzi/raspored` (tjedna pravila: izmjena
+  vrijedi za buduće termine; prije spremanja pregled koji termini dobivaju novo vrijeme, a koji se otkazuju).
+- Termin koji je započeo ili je `HELD` ne može se pomaknuti ni otkazati (odluka D-03): polja vremena su zaključana.
+- Spremanje: klijentska validacija (završetak nakon početka, ispravni datumi), zatim greške poslužitelja po poljima
+  (`fieldErrors`, `TRAINING_OVERLAP` uz vrijeme početka, `VERSION_CONFLICT` s „Učitaj najnovije”). Uspjeh se
+  prikazuje tek nakon odgovora poslužitelja (`mutateAsync`, otporno na ponovno montiranje obrasca), a svaka uspješna
+  promjena invalidira cijeli `trainingKeys.all` pa se kalendar osvježi.
 
 ## Navigacija i ovlasti
 

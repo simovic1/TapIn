@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router';
+import { Link, useLocation, useParams } from 'react-router';
 import { Alert } from '../../../components/ui/Alert';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { QueryState } from '../../../components/ui/QueryState';
@@ -6,6 +6,8 @@ import { formatLocalDate, formatLongDate, formatTimeRange } from '../../../lib/f
 import { hasAnyRole, STAFF_ROLES } from '../../../lib/session/roles';
 import { useCurrentUser } from '../../../lib/session/session';
 import { useTraining } from '../api';
+import type { SavedNotice } from './TrainingFormPage';
+import { StaffTrainingActions } from '../components/StaffTrainingActions';
 import { coachNames, registrationLabel, TrainingStatusBadge, trainingTitle } from '../components/TrainingBits';
 
 export function TrainingDetailPage() {
@@ -14,6 +16,7 @@ export function TrainingDetailPage() {
   const training = useTraining(id);
   const { data: user } = useCurrentUser();
   const isStaff = hasAnyRole(user, STAFF_ROLES);
+  const notice = (useLocation().state as SavedNotice | null)?.notice;
 
   return (
     <section>
@@ -26,6 +29,11 @@ export function TrainingDetailPage() {
         {(t) => (
           <>
             <PageHeader title={trainingTitle(t)} description={`${formatLongDate(t.startAt)}, ${formatTimeRange(t.startAt, t.endAt)}`} />
+            {notice && (
+              <div className="mb-4">
+                <Alert tone="success">{notice}</Alert>
+              </div>
+            )}
             {t.status === 'CANCELLED' && (
               <div className="mb-4">
                 <Alert tone="error" title="Trening je otkazan">
@@ -73,6 +81,7 @@ export function TrainingDetailPage() {
               <dt className="text-slate-500 dark:text-slate-400">Vrsta</dt>
               <dd>{t.scheduleId ? 'Iz tjednog rasporeda' : 'Izvanredni trening'}</dd>
             </dl>
+            {isStaff && <StaffTrainingActions training={t} onReload={() => training.refetch()} />}
           </>
         )}
       </QueryState>

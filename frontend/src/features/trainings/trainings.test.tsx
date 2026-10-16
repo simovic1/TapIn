@@ -3,35 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clubDateTimeToIso, toClubParts } from '../../lib/format';
 import { json, makeUser, mockApi, problem, renderApp } from '../../test/utils';
-import type { TrainingDetail } from './api';
+import { training } from './testFixtures';
 
 /** Friday 16 Oct 2026, 12:00 in Zagreb. */
 const NOW = new Date('2026-10-16T10:00:00Z');
-
-export function training(overrides: Partial<TrainingDetail> = {}): TrainingDetail {
-  return {
-    trainingId: 1,
-    scheduleId: 1,
-    occurrenceDate: '2026-10-20',
-    title: null,
-    startAt: '2026-10-20T16:30:00Z',
-    endAt: '2026-10-20T18:00:00Z',
-    localDate: '2026-10-20',
-    status: 'SCHEDULED',
-    coaches: [],
-    myRegistrationStatus: 'NONE',
-    myAttendanceStatus: 'UNMARKED',
-    canRegister: false,
-    canCancelRegistration: false,
-    version: 0,
-    cancellationReason: null,
-    note: null,
-    createdByUserId: null,
-    createdAt: '2026-10-01T00:00:00Z',
-    updatedAt: '2026-10-01T00:00:00Z',
-    ...overrides,
-  };
-}
 
 const tuesday = training();
 const thursday = training({
