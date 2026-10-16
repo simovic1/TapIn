@@ -88,9 +88,16 @@ public class TrainingService {
                                Long createdByUserId, Instant createdAt, Instant updatedAt) {
     }
 
-    /** What other modules need to know about a session; {@code displayTime} is formatted for e-mails. */
+    /**
+     * What other modules need to know about a session. {@code emailValues} are the e-mail placeholders
+     * {@code trainingName}, {@code trainingTime} (club-local) and {@code trainingUrl}.
+     */
     public record SessionRef(long trainingId, TrainingStatus status, Instant startAt, Instant endAt,
-                             String displayTime) {
+                             Map<String, Object> emailValues) {
+
+        public String displayTime() {
+            return (String) emailValues.get("trainingTime");
+        }
 
         public boolean hasEnded(Instant now) {
             return status == TrainingStatus.HELD || !endAt.isAfter(now);
@@ -166,7 +173,7 @@ public class TrainingService {
         TrainingSession s = sessions.findForShare(trainingId)
                 .orElseThrow(() -> ApiException.notFound("Trening ne postoji."));
         return new SessionRef(s.getId(), s.getStatus(), s.getStartAt(), s.getEndAt(),
-                TrainingNotifier.format(s.getStartAt(), directory.theClub().timeZone()));
+                notifier.emailValues(s, directory.theClub().timeZone()));
     }
 
     // ------------------------------------------------------------------ changes

@@ -145,8 +145,9 @@ public class RegistrationService {
     }
 
     private EnqueueResult notify(EmailEventType type, MemberRef member, SessionRef session, long eventId) {
-        return outbox.enqueue(OutboxMessage.of(type, member.userId(), member.email(),
-                Map.of("firstName", member.firstName(), "trainingTime", session.displayTime()),
+        Map<String, Object> payload = new java.util.HashMap<>(session.emailValues());
+        payload.put("firstName", member.firstName());
+        return outbox.enqueue(OutboxMessage.of(type, member.userId(), member.email(), payload,
                 type.name() + ":registration-event-" + eventId).forSession(session.trainingId()));
     }
 

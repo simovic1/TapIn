@@ -95,6 +95,25 @@ Ublažavanje:
 Novi provider = implementacija `EmailSender` koja nikad ne baca iznimku za greške dostave, nego vraća
 `Accepted`, `TransientFailure(reason, ambiguous)` ili `PermanentFailure(reason)`.
 
+## Katalog poruka (§8.1, BJJ-28)
+
+| Tip | Primatelj | Okidač | Sadržaj |
+|---|---|---|---|
+| `INVITATION` | pozvani korisnik | poziv / ponovno slanje | poveznica `/pozivnica#token`, rok |
+| `PASSWORD_RESET` | korisnik | zahtjev za reset | poveznica `/nova-lozinka#token`, rok |
+| `REGISTRATION_CONFIRMED` | član | nova prijava / ponovna prijava | naziv, lokalni datum i vrijeme, „prijava nije potvrda dolaska”, poveznica |
+| `REGISTRATION_CANCELLED` | član | sam otkaže prijavu | „Otkazali ste prijavu …” – trening se održava |
+| `TRAINING_CANCELLED` | samo `REGISTERED` članovi | trener otkaže termin | „Trening je otkazan …”, razlog |
+| `TRAINING_RESCHEDULED` | samo `REGISTERED` članovi | promjena početka termina | staro i novo vrijeme |
+| `TRAINING_REMINDER` | `REGISTERED` član s uključenim podsjetnikom | `start_at − 3 h` (BJJ-29) | vrijeme, poveznica za otkaz |
+| `ATTENDANCE_RECORDED` | samo pogođeni član | svaka stvarna promjena prisutnosti (pojedinačno, masovno, povijesno, ispravak, poništenje) | novi status |
+
+Promocija pojasa ne šalje poruku. Podatke o terminu (`trainingName`, `trainingTime` u Europe/Zagreb, `trainingUrl`)
+daje scheduling (`SessionRef.emailValues()`), pa su sve poruke o istom treningu dosljedne. `{name?}` u predlošku je
+neobvezan placeholder; za starije retke bez `trainingName` koristi se „Trening”.
+`NotificationCatalogIntegrationTest` provjerava primatelje, sadržaj i poveznice kroz pravi outbox procesor i testni
+provider koji ništa ne šalje.
+
 ## Za proizvođače događaja (drugi moduli)
 
 ```java

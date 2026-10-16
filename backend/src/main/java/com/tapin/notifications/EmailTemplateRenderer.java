@@ -21,7 +21,11 @@ class EmailTemplateRenderer {
     private record Template(String subject, String body) {
     }
 
-    private static final Pattern PLACEHOLDER = Pattern.compile("\\{(\\w+)}");
+    /** Values for messages queued before a placeholder existed (older outbox rows stay renderable). */
+    private static final Map<String, Object> DEFAULTS = Map.of("trainingName", "Trening");
+
+    /** {@code {name}} is required; {@code {name?}} is optional (empty when missing, e.g. in older outbox rows). */
+    private static final Pattern PLACEHOLDER = Pattern.compile("\\{(\\w+)(\\?)?}");
     private static final String FOOTER = "\n\n--\nOva poruka je automatski poslana iz aplikacije TapIn. Ne odgovarajte na nju.";
 
     private static final Map<EmailEventType, Template> TEMPLATES = new EnumMap<>(Map.of(
@@ -34,23 +38,31 @@ class EmailTemplateRenderer {
                     "Bok {firstName},\n\nzatražena je promjena lozinke. Novu lozinku postavite na poveznici:\n"
                             + "{resetUrl}\n\nPoveznica vrijedi do {expiresAt}. Ako niste vi zatražili promjenu, zanemarite ovu poruku."),
             EmailEventType.REGISTRATION_CONFIRMED, new Template(
-                    "Prijavljeni ste na trening {trainingTime}",
-                    "Bok {firstName},\n\nprijava na trening {trainingTime} je zaprimljena."),
+                    "Prijava zaprimljena: {trainingName}, {trainingTime}",
+                    "Bok {firstName},\n\nprijavljeni ste na trening „{trainingName}” – {trainingTime}.\n"
+                            + "Prijava nije potvrda dolaska: dolazak evidentira trener na treningu.\n\n"
+                            + "Ako ne možete doći, otkažite prijavu: {trainingUrl?}"),
             EmailEventType.REGISTRATION_CANCELLED, new Template(
-                    "Prijava na trening {trainingTime} je otkazana",
-                    "Bok {firstName},\n\nvaša prijava na trening {trainingTime} je otkazana."),
+                    "Otkazali ste prijavu: {trainingName}, {trainingTime}",
+                    "Bok {firstName},\n\nvaša prijava na trening „{trainingName}” – {trainingTime} je otkazana.\n"
+                            + "Trening se i dalje održava prema rasporedu; ponovno se možete prijaviti: {trainingUrl?}"),
             EmailEventType.TRAINING_REMINDER, new Template(
-                    "Podsjetnik: trening {trainingTime}",
-                    "Bok {firstName},\n\npodsjećamo vas da ste prijavljeni na trening {trainingTime}."),
+                    "Podsjetnik: {trainingName}, {trainingTime}",
+                    "Bok {firstName},\n\npodsjećamo vas da ste prijavljeni na trening „{trainingName}” – {trainingTime}.\n\n"
+                            + "Ako ne možete doći, otkažite prijavu: {trainingUrl?}\n"
+                            + "Podsjetnike možete isključiti u postavkama profila."),
             EmailEventType.TRAINING_CANCELLED, new Template(
-                    "Otkazan trening {trainingTime}",
-                    "Bok {firstName},\n\ntrening {trainingTime} je otkazan."),
+                    "Trening je otkazan: {trainingName}, {trainingTime}",
+                    "Bok {firstName},\n\ntrener je otkazao trening „{trainingName}” – {trainingTime}.{reasonLine?}\n"
+                            + "Na ovaj termin ne trebate doći. Raspored: {trainingUrl?}"),
             EmailEventType.TRAINING_RESCHEDULED, new Template(
-                    "Promijenjen termin treninga",
-                    "Bok {firstName},\n\ntrening zakazan za {previousTrainingTime} premješten je na {trainingTime}."),
+                    "Promijenjen termin: {trainingName}, sada {trainingTime}",
+                    "Bok {firstName},\n\ntrening „{trainingName}” premješten je s {previousTrainingTime} "
+                            + "na {trainingTime}.\nVaša prijava vrijedi za novi termin. Detalji: {trainingUrl?}"),
             EmailEventType.ATTENDANCE_RECORDED, new Template(
-                    "Evidencija dolaska: trening {trainingTime}",
-                    "Bok {firstName},\n\nza trening {trainingTime} evidentirano je: {attendanceStatus}.")));
+                    "Evidencija dolaska: {trainingName}, {trainingTime}",
+                    "Bok {firstName},\n\nza trening „{trainingName}” – {trainingTime} evidentirano je: "
+                            + "{attendanceStatus}.\nAko evidencija nije točna, javite se treneru. Trening: {trainingUrl?}")));
 
     Rendered render(EmailEventType type, Map<String, Object> payload) {
         Template template = TEMPLATES.get(type);
@@ -64,7 +76,10 @@ class EmailTemplateRenderer {
         Matcher matcher = PLACEHOLDER.matcher(text);
         StringBuilder out = new StringBuilder();
         while (matcher.find()) {
-            Object value = payload.get(matcher.group(1));
+            Object value = payload.getOrDefault(matcher.group(1), DEFAULTS.get(matcher.group(1)));
+            if (value == null && matcher.group(2) != null) {
+                value = "";
+            }
             if (value == null) {
                 throw new IllegalArgumentException("Missing payload value '" + matcher.group(1) + "' for " + type);
             }

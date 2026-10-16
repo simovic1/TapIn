@@ -5,6 +5,7 @@ import com.tapin.notifications.EnqueueResult;
 import com.tapin.notifications.NotificationOutbox;
 import com.tapin.notifications.OutboxMessage;
 import com.tapin.scheduling.TrainingParticipants.Participant;
+import com.tapin.shared.config.AppUrlProperties;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -28,22 +29,37 @@ class TrainingNotifier {
 
     private final NotificationOutbox outbox;
     private final List<TrainingParticipants> participants;
+    private final AppUrlProperties appUrl;
 
-    TrainingNotifier(NotificationOutbox outbox, List<TrainingParticipants> participants) {
+    TrainingNotifier(NotificationOutbox outbox, List<TrainingParticipants> participants, AppUrlProperties appUrl) {
         this.outbox = outbox;
         this.participants = participants;
+        this.appUrl = appUrl;
+    }
+
+    /**
+     * What every training e-mail says about the session (spec §8.1): its name, club-local date and time and a link
+     * to its page. Shared by scheduling, registrations, attendance and reminders so all messages agree.
+     */
+    Map<String, Object> emailValues(TrainingSession session, ZoneId zone) {
+        return Map.of(
+                "trainingName", session.getTitle() != null ? session.getTitle() : "Trening",
+                "trainingTime", format(session.getStartAt(), zone),
+                "trainingUrl", appUrl.link("/treninzi/" + session.getId()));
     }
 
     /** @return {@code QUEUED} if at least one e-mail was written, otherwise {@code NOT_REQUIRED} */
     String cancelled(TrainingSession session, long eventId, ZoneId zone) {
-        return notifyAll(session, EmailEventType.TRAINING_CANCELLED, eventId,
-                Map.of("trainingTime", format(session.getStartAt(), zone)));
+        Map<String, Object> values = new HashMap<>(emailValues(session, zone));
+        String reason = session.getCancellationReason();
+        values.put("reasonLine", reason == null ? "" : "\nRazlog: " + reason);
+        return notifyAll(session, EmailEventType.TRAINING_CANCELLED, eventId, values);
     }
 
     String rescheduled(TrainingSession session, Instant previousStart, long eventId, ZoneId zone) {
-        return notifyAll(session, EmailEventType.TRAINING_RESCHEDULED, eventId, Map.of(
-                "trainingTime", format(session.getStartAt(), zone),
-                "previousTrainingTime", format(previousStart, zone)));
+        Map<String, Object> values = new HashMap<>(emailValues(session, zone));
+        values.put("previousTrainingTime", format(previousStart, zone));
+        return notifyAll(session, EmailEventType.TRAINING_RESCHEDULED, eventId, values);
     }
 
     private String notifyAll(TrainingSession session, EmailEventType type, long eventId, Map<String, Object> values) {

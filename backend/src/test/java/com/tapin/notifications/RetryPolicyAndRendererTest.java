@@ -45,7 +45,7 @@ class RetryPolicyAndRendererTest {
         EmailTemplateRenderer.Rendered rendered = renderer.render(EmailEventType.ATTENDANCE_RECORDED,
                 Map.of("firstName", "Ana", "trainingTime", "utorak 20. 10. 2026. u 18:30", "attendanceStatus", "prisutan"));
 
-        assertThat(rendered.subject()).isEqualTo("Evidencija dolaska: trening utorak 20. 10. 2026. u 18:30");
+        assertThat(rendered.subject()).isEqualTo("Evidencija dolaska: Trening, utorak 20. 10. 2026. u 18:30");
         assertThat(rendered.body()).contains("Bok Ana").contains("prisutan").contains("automatski poslana");
         assertThatThrownBy(() -> renderer.render(EmailEventType.TRAINING_REMINDER, Map.of("firstName", "Ana")))
                 .isInstanceOf(IllegalArgumentException.class)

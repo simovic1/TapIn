@@ -201,7 +201,7 @@ class RegistrationIntegrationTest {
                 .containsExactly("REGISTERED", "CANCELLED", "RE_REGISTERED");
         assertThat(jdbc.queryForList("SELECT event_type FROM email_outbox ORDER BY id", String.class))
                 .containsExactly("REGISTRATION_CONFIRMED", "REGISTRATION_CANCELLED", "REGISTRATION_CONFIRMED");
-        assertThat(renderedOutbox("REGISTRATION_CANCELLED").subject()).contains("je otkazana");
+        assertThat(renderedOutbox("REGISTRATION_CANCELLED").subject()).startsWith("Otkazali ste prijavu");
     }
 
     @Test

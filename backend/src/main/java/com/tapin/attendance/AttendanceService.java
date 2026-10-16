@@ -284,10 +284,12 @@ public class AttendanceService {
         String cleanNote = note == null || note.isBlank() ? null : note.strip();
         long auditId = attendances.insertAudit(trainingId, membershipId, actor.userId(), previous, target, source,
                 cleanNote, now);
+        // Every real change - also historical entry and corrections - informs the affected member only (§8.1).
+        Map<String, Object> payload = new java.util.HashMap<>(session.emailValues());
+        payload.put("firstName", member.firstName());
+        payload.put("attendanceStatus", label(target));
         EnqueueResult queued = outbox.enqueue(OutboxMessage.of(EmailEventType.ATTENDANCE_RECORDED, member.userId(),
-                member.email(), Map.of("firstName", member.firstName(), "trainingTime", session.displayTime(),
-                        "attendanceStatus", label(target)),
-                "ATTENDANCE_RECORDED:audit-" + auditId).forSession(trainingId));
+                member.email(), payload, "ATTENDANCE_RECORDED:audit-" + auditId).forSession(trainingId));
         return result(trainingId, member, attendances.find(trainingId, membershipId).orElseThrow(), true, queued);
     }
 
