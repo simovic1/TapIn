@@ -1,5 +1,7 @@
 import { Link } from 'react-router';
 import { QueryState } from '../../../components/ui/QueryState';
+import { hasAnyRole } from '../../../lib/session/roles';
+import { useCurrentUser } from '../../../lib/session/session';
 import { formatLongDate, formatTimeRange } from '../../../lib/format';
 import { useUpcomingTrainings, type TrainingSummary } from '../api';
 import { coachNames, registrationLabel, TrainingStatusBadge, trainingTitle } from './TrainingBits';
@@ -89,6 +91,9 @@ function NextTrainingsView({ items }: { items: TrainingSummary[] }) {
 
 function TrainingHighlight({ training, primary = false }: { training: TrainingSummary; primary?: boolean }) {
   const inProgress = Date.parse(training.startAt) <= Date.now();
+  const { data: user } = useCurrentUser();
+  // Registration is a member action: staff without the MEMBER role has no registration status.
+  const isMember = hasAnyRole(user, ['MEMBER']);
   return (
     <div className="flex flex-col gap-3">
       <div>
@@ -103,7 +108,7 @@ function TrainingHighlight({ training, primary = false }: { training: TrainingSu
       </div>
       <p className="text-sm">
         {inProgress && <span className="mr-2 font-semibold text-green-700 dark:text-green-400">U tijeku</span>}
-        <span className="text-slate-700 dark:text-slate-300">{registrationLabel(training)}</span>
+        {isMember && <span className="text-slate-700 dark:text-slate-300">{registrationLabel(training)}</span>}
       </p>
       <Link
         to={`/treninzi/${training.trainingId}`}
