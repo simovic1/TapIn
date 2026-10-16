@@ -1,0 +1,21 @@
+# Module ownership (see docs/architecture/modules.md). Replace/extend handles as the team grows.
+# Later rules win.
+
+*                                                   @simovic1
+
+# Backend modules
+/backend/src/main/java/com/tapin/shared/            @simovic1
+/backend/src/main/java/com/tapin/auth/              @simovic1
+/backend/src/main/java/com/tapin/members/           @simovic1
+/backend/src/main/java/com/tapin/belts/             @simovic1
+/backend/src/main/java/com/tapin/scheduling/        @simovic1
+/backend/src/main/java/com/tapin/registrations/     @simovic1
+/backend/src/main/java/com/tapin/attendance/        @simovic1
+/backend/src/main/java/com/tapin/reporting/         @simovic1
+/backend/src/main/java/com/tapin/notifications/     @simovic1
+
+# Schema changes always need the migration owner's review
+/backend/src/main/resources/db/migration/           @simovic1
+
+# Frontend features
+/frontend/src/features/                             @simovic1

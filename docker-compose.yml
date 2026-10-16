@@ -1,0 +1,68 @@
+# Local development infrastructure.
+#
+#   docker compose up -d                 -> PostgreSQL + Mailpit (run backend/frontend from source, see README)
+#   docker compose --profile app up -d --build   -> also builds and runs backend + frontend containers
+#
+# Values come from .env (copy .env.example). Defaults below match backend/src/main/resources/application-local.yml,
+# so a fresh clone works even without a .env file.
+
+name: tapin
+
+services:
+  db:
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-tapin}
+      POSTGRES_USER: ${DB_USER:-tapin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-tapin}
+      TZ: UTC
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      # PostgreSQL 18+ images keep data in a versioned subdirectory of /var/lib/postgresql
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Dev SMTP sink: catches every outgoing e-mail. Web UI: http://localhost:8025
+  mail:
+    image: axllent/mailpit:v1.31.6
+    restart: unless-stopped
+    ports:
+      - "${MAIL_SMTP_PORT:-1025}:1025"
+      - "${MAIL_UI_PORT:-8025}:8025"
+
+  backend:
+    profiles: [app]
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+      mail:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      DB_URL: jdbc:postgresql://db:5432/${DB_NAME:-tapin}
+      DB_USER: ${DB_USER:-tapin}
+      DB_PASSWORD: ${DB_PASSWORD:-tapin}
+      MAIL_HOST: mail
+      MAIL_PORT: 1025
+      CLUB_NAME: ${CLUB_NAME:-BJJ klub (local)}
+    ports:
+      - "8080:8080"
+
+  frontend:
+    profiles: [app]
+    build: ./frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+
+volumes:
+  db-data:

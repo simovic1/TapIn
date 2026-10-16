@@ -1,0 +1,19 @@
+# Production. All connection values and secrets are required environment variables
+# (DB_URL, DB_USER, DB_PASSWORD, MAIL_HOST, MAIL_USERNAME, MAIL_PASSWORD, MAIL_FROM). Startup fails if missing.
+# HTTPS is terminated by the reverse proxy; the session cookie stays Secure (base config).
+
+spring:
+  flyway:
+    # Never wipe a production database.
+    clean-disabled: true
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+management:
+  endpoint:
+    health:
+      show-details: never

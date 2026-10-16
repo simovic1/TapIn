@@ -1,0 +1,19 @@
+# Automated tests. The datasource is provided by Testcontainers (@ServiceConnection), so no DB_* variables
+# are needed. Mail is never actually sent in tests.
+
+spring:
+  mail:
+    host: localhost
+    port: 2525
+
+server:
+  servlet:
+    session:
+      cookie:
+        secure: false
+
+tapin:
+  club:
+    name: Test klub
+  mail:
+    from: test@tapin.local

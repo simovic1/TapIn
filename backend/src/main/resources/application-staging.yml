@@ -1,0 +1,12 @@
+# Staging: production-like. All connection values and secrets are required environment variables
+# (DB_URL, DB_USER, DB_PASSWORD, MAIL_HOST, MAIL_USERNAME, MAIL_PASSWORD, MAIL_FROM). Startup fails if missing.
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+logging:
+  level:
+    com.tapin: DEBUG
