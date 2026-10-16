@@ -78,6 +78,11 @@ class TrainingNotifier {
         return queued ? EnqueueResult.QUEUED.notificationStatus() : EnqueueResult.DUPLICATE.notificationStatus();
     }
 
+    /** A cancelled training gets no reminder: reminders still waiting in the outbox are withdrawn (spec §8.2). */
+    void discardReminders(long sessionId) {
+        outbox.discardPending(sessionId, EmailEventType.TRAINING_REMINDER, "Trening je otkazan; podsjetnik se ne šalje.");
+    }
+
     /** "utorak 20. 10. 2026. u 18:30" in the club time zone. */
     static String format(Instant instant, ZoneId zone) {
         ZonedDateTime local = instant.atZone(zone);

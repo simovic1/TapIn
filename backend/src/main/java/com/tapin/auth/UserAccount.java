@@ -33,6 +33,9 @@ class UserAccount {
 
     private String phone;
 
+    @Column(name = "training_reminders_enabled", nullable = false)
+    private boolean trainingRemindersEnabled = true;
+
     @Column(name = "password_hash")
     private String passwordHash;
 
@@ -105,5 +108,7 @@ class UserAccount {
     String getPasswordHash() { return passwordHash; }
     AccountStatus getAccountStatus() { return accountStatus; }
     String getPhone() { return phone; }
+    boolean isTrainingRemindersEnabled() { return trainingRemindersEnabled; }
+    void setTrainingRemindersEnabled(boolean enabled) { this.trainingRemindersEnabled = enabled; }
     long getVersion() { return version; }
 }

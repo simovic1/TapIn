@@ -16,7 +16,8 @@ public record CurrentUserResponse(
         List<String> roles,
         LocalDate joinedOn,
         Club club,
-        long version) {
+        long version,
+        boolean trainingRemindersEnabled) {
 
     public record Club(String name, String timeZone) {
     }

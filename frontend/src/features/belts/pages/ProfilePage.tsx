@@ -45,6 +45,32 @@ function OwnProfile({ initial }: { initial: CurrentUser }) {
       <Button type="submit" loading={save.isPending} disabled={reload.isPending}>Spremi telefon</Button>
       {save.isError && <Button onClick={() => reload.mutate()} disabled={save.isPending || reload.isPending}>Učitaj spremljene podatke i odbaci unos</Button>}
     </form>
+    <ReminderSetting user={user} onSaved={value => { setUser(value); client.setQueryData(sessionKeys.currentUser, value); }} />
     <section className="space-y-3" aria-label="Pojas"><h2 className="text-lg font-semibold">Pojas i povijest pojaseva</h2><OwnBeltProgress /></section>
   </div>;
+}
+
+/**
+ * Decision D-04: each member decides about the reminder 3 h before registered trainings. Saved immediately; shown
+ * as saved only after the server confirmed it, a failure leaves the switch where it was.
+ */
+function ReminderSetting({ user, onSaved }: { user: CurrentUser; onSaved: (value: CurrentUser) => void }) {
+  const save = useMutation({
+    mutationFn: (enabled: boolean) => apiFetch<CurrentUser>('/me/profile', {
+      method: 'PATCH', body: JSON.stringify({ expectedVersion: user.version, trainingRemindersEnabled: enabled }),
+    }),
+    onSuccess: onSaved,
+  });
+  return <section className="space-y-2 rounded-xl border p-4" aria-labelledby="reminder-setting">
+    <h2 id="reminder-setting" className="text-lg font-semibold">Obavijesti</h2>
+    <label className="flex min-h-11 items-center gap-3">
+      <input type="checkbox" className="size-5" checked={user.trainingRemindersEnabled} disabled={save.isPending}
+        onChange={e => save.mutate(e.target.checked)} />
+      <span>Podsjetnik e-mailom 3 sata prije treninga na koji sam prijavljen/a</span>
+    </label>
+    <p className="text-sm text-slate-600 dark:text-slate-400">Potvrde prijave, obavijesti o otkazanim i pomaknutim treninzima i evidenciji dolazaka stižu i dalje.</p>
+    {save.isPending && <p role="status" className="text-sm">Spremanje…</p>}
+    {save.isSuccess && !save.isPending && <Alert tone="success">{save.data.trainingRemindersEnabled ? 'Podsjetnik je uključen.' : 'Podsjetnik je isključen.'}</Alert>}
+    {save.isError && <Alert tone="error">Postavka nije spremljena. {errorMessage(save.error)}</Alert>}
+  </section>;
 }

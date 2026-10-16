@@ -38,6 +38,14 @@ public final class ProfilePatch {
         return field.equals("phone") && text.isBlank() ? null : text;
     }
 
+    /** {@code null} when the field is absent; a JSON boolean otherwise. */
+    public Boolean bool(String field) {
+        if (!has(field)) return null;
+        JsonNode value = fields.get(field);
+        if (value == null || !value.isBoolean()) throw invalid("Polje " + field + " mora biti true ili false.");
+        return value.asBoolean();
+    }
+
     public LocalDate date(String field, LocalDate fallback) {
         try { return has(field) ? LocalDate.parse(text(field, null)) : fallback; }
         catch (java.time.DateTimeException ex) { throw invalid("Datum mora biti u obliku YYYY-MM-DD."); }

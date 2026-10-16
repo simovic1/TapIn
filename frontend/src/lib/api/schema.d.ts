@@ -996,10 +996,15 @@ export interface components {
             };
             /** @description Verzija korisničkog profila (za `PATCH /me/profile`). */
             version: components["schemas"]["Version"];
+            /** @description Prima li podsjetnik 3 sata prije treninga na koji je prijavljen (zadano `true`, odluka D-04). */
+            trainingRemindersEnabled: boolean;
         };
+        /** @description Izostavljeno polje ostaje nepromijenjeno; `phone` s vrijednošću null briše telefon. */
         UpdateOwnProfileRequest: {
             expectedVersion: components["schemas"]["ExpectedVersion"];
-            phone: components["schemas"]["Phone"] | null;
+            phone?: components["schemas"]["Phone"] | null;
+            /** @description Uključuje ili isključuje podsjetnik 3 sata prije treninga. */
+            trainingRemindersEnabled?: boolean;
         };
         MemberSummary: {
             membershipId: components["schemas"]["MembershipId"];

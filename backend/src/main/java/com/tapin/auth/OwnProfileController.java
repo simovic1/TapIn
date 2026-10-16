@@ -16,8 +16,9 @@ class OwnProfileController {
 
     @PatchMapping
     CurrentUserResponse update(@AuthenticationPrincipal AuthenticatedUser actor, @RequestBody Map<String, JsonNode> fields) {
-        var patch = new ProfilePatch(fields, Set.of("expectedVersion", "phone"));
-        users.updateOwnPhone(actor.userId(), patch.version(), patch.text("phone", null));
+        var patch = new ProfilePatch(fields, Set.of("expectedVersion", "phone", "trainingRemindersEnabled"));
+        users.updateOwnProfile(actor.userId(), patch.version(), patch.has("phone"), patch.text("phone", null),
+                patch.bool("trainingRemindersEnabled"));
         return current.assemble(actor);
     }
 }

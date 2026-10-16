@@ -114,6 +114,21 @@ neobvezan placeholder; za starije retke bez `trainingName` koristi se „Trening
 `NotificationCatalogIntegrationTest` provjerava primatelje, sadržaj i poveznice kroz pravi outbox procesor i testni
 provider koji ništa ne šalje.
 
+## Podsjetnik 3 sata prije treninga (§8.2, BJJ-29, odluka D-04)
+
+- `registrations.TrainingReminderService` (posao svake minute, `tapin.reminders.*`): za svaki neotkazani trening
+  kojem je `start_at − 3 h` prošao, a još nije počeo, upisuje `TRAINING_REMINDER` članovima čija je prijava
+  `REGISTERED` i napravljena **najkasnije u trenutku dospijeća** – kasnija (i ponovna) prijava dobiva potvrdu, ali ne
+  retroaktivni podsjetnik. Dospijeće je trenutak (`Instant`), pa je za 18:30 Zagreb uvijek 15:30 Zagreb.
+- **D-04 – tolerancija:** propušteno dospijeće (restart, ispad) nadoknađuje se do početka treninga. Poruka nosi
+  `expires_at = start_at`; ako je do početka treninga provider nije prihvatio, processor je označi `FAILED` („Stale”)
+  i više je ne šalje.
+- Ključ `TRAINING_REMINDER:session-{id}:membership-{id}` ne sadrži vrijeme: restart, dva workera ni pomicanje
+  termina ne stvaraju drugi podsjetnik. Otkazivanje termina (pojedinačno ili kroz pravilo) povlači podsjetnike koji
+  još čekaju (`NotificationOutbox.discardPending`).
+- Član ga isključuje na „Moj profil” (`users.training_reminders_enabled`, `PATCH /me/profile`); cijela aplikacija
+  sa `REMINDERS_ENABLED=false`.
+
 ## Za proizvođače događaja (drugi moduli)
 
 ```java

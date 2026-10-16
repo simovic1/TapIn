@@ -1,5 +1,6 @@
 package com.tapin.notifications;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 
@@ -21,7 +22,8 @@ public record OutboxMessage(
         Long sessionId,
         Map<String, Object> payload,
         String deduplicationKey,
-        boolean containsSecret) {
+        boolean containsSecret,
+        Instant expiresAt) {
 
     public static final int MAX_DEDUPLICATION_KEY_LENGTH = 255;
 
@@ -35,6 +37,18 @@ public record OutboxMessage(
         payload = payload == null ? Map.of() : Map.copyOf(payload);
     }
 
+    /** Without expiry. */
+    public OutboxMessage(EmailEventType eventType, long recipientUserId, String recipientEmail, Long sessionId,
+                         Map<String, Object> payload, String deduplicationKey, boolean containsSecret) {
+        this(eventType, recipientUserId, recipientEmail, sessionId, payload, deduplicationKey, containsSecret, null);
+    }
+
+    /** Not delivered after {@code instant} (stale, e.g. a reminder once the training started); FAILED instead. */
+    public OutboxMessage expiresAt(Instant instant) {
+        return new OutboxMessage(eventType, recipientUserId, recipientEmail, sessionId, payload, deduplicationKey,
+                containsSecret, instant);
+    }
+
     public static OutboxMessage of(EmailEventType type, long recipientUserId, String recipientEmail,
                                    Map<String, Object> payload, String deduplicationKey) {
         return new OutboxMessage(type, recipientUserId, recipientEmail, null, payload, deduplicationKey, false);
@@ -42,10 +56,11 @@ public record OutboxMessage(
 
     public OutboxMessage forSession(long sessionId) {
         return new OutboxMessage(eventType, recipientUserId, recipientEmail, sessionId, payload, deduplicationKey,
-                containsSecret);
+                containsSecret, expiresAt);
     }
 
     public OutboxMessage withSecret() {
-        return new OutboxMessage(eventType, recipientUserId, recipientEmail, sessionId, payload, deduplicationKey, true);
+        return new OutboxMessage(eventType, recipientUserId, recipientEmail, sessionId, payload, deduplicationKey, true,
+                expiresAt);
     }
 }

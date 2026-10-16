@@ -37,7 +37,8 @@ class CurrentUserAssembler {
                 membership.roles().stream().sorted(Comparator.comparingInt(CurrentUserAssembler::roleOrder)).toList(),
                 membership.joinedOn(),
                 new CurrentUserResponse.Club(membership.clubName(), membership.clubTimeZone()),
-                profile.version());
+                profile.version(),
+                profile.trainingRemindersEnabled());
     }
 
     private static int roleOrder(String role) {

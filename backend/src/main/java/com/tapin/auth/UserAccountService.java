@@ -41,8 +41,13 @@ public class UserAccountService {
         catch (DataIntegrityViolationException ex) { throw duplicateEmail(); }
     }
 
+    /**
+     * Own profile fields ({@code null} = unchanged): phone ({@code phoneSent} distinguishes "clear" from "absent")
+     * and the training reminder preference (decision D-04).
+     */
     @Transactional
-    public void updateOwnPhone(long userId, long expectedVersion, String phone) {
+    public void updateOwnProfile(long userId, long expectedVersion, boolean phoneSent, String phone,
+                                 Boolean trainingRemindersEnabled) {
         // Same lock order as member administration; changing a phone invalidates the member editor's version too.
         jdbc.execute("SELECT pg_advisory_xact_lock(" + 0x7A91_0001L + ")");
         jdbc.queryForObject("SELECT id FROM users WHERE id=? FOR UPDATE", Long.class, userId);
@@ -50,9 +55,26 @@ public class UserAccountService {
         if (user.getVersion() != expectedVersion) throw ApiException.versionConflict(findProfile(userId).orElseThrow());
         if (phone != null && !phone.matches("^[+0-9 ()/-]{6,32}$"))
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "Telefon mora sadržavati 6–32 dopuštena znaka.");
-        user.updateContact(user.getEmail(), user.getFirstName(), user.getLastName(), phone);
+        if (phoneSent) {
+            user.updateContact(user.getEmail(), user.getFirstName(), user.getLastName(), phone);
+        }
+        if (trainingRemindersEnabled != null) {
+            user.setTrainingRemindersEnabled(trainingRemindersEnabled);
+        }
         users.saveAndFlush(user);
         jdbc.update("UPDATE club_memberships SET version=version+1, updated_at=now() WHERE user_id=?", userId);
+    }
+
+    /** Users (of {@code userIds}) who want the training reminder. */
+    @Transactional(readOnly = true)
+    public java.util.Set<Long> withTrainingReminders(Collection<Long> userIds) {
+        java.util.Set<Long> result = new java.util.HashSet<>();
+        users.findAllById(userIds).forEach(u -> {
+            if (u.isTrainingRemindersEnabled()) {
+                result.add(u.getId());
+            }
+        });
+        return result;
     }
 
     @Transactional(readOnly = true)
@@ -96,16 +118,14 @@ public class UserAccountService {
 
     @Transactional(readOnly = true)
     public Optional<UserProfile> findProfile(long userId) {
-        return users.findById(userId).map(u -> new UserProfile(u.getId(), u.getEmail(), u.getFirstName(),
-                u.getLastName(), u.getPhone(), u.getAccountStatus(), u.getVersion()));
+        return users.findById(userId).map(UserAccountService::profile);
     }
 
     /** Batch lookup for display (names of coaches, notification recipients); unknown ids are skipped. */
     @Transactional(readOnly = true)
     public Map<Long, UserProfile> findProfiles(Collection<Long> userIds) {
         Map<Long, UserProfile> result = new HashMap<>();
-        users.findAllById(userIds).forEach(u -> result.put(u.getId(), new UserProfile(u.getId(), u.getEmail(),
-                u.getFirstName(), u.getLastName(), u.getPhone(), u.getAccountStatus(), u.getVersion())));
+        users.findAllById(userIds).forEach(u -> result.put(u.getId(), profile(u)));
         return result;
     }
 
@@ -117,7 +137,12 @@ public class UserAccountService {
     }
 
     public record UserProfile(long userId, String email, String firstName, String lastName, String phone,
-                              AccountStatus accountStatus, long version) {
+                              AccountStatus accountStatus, long version, boolean trainingRemindersEnabled) {
+    }
+
+    private static UserProfile profile(UserAccount u) {
+        return new UserProfile(u.getId(), u.getEmail(), u.getFirstName(), u.getLastName(), u.getPhone(),
+                u.getAccountStatus(), u.getVersion(), u.isTrainingRemindersEnabled());
     }
 
     private static UserRef toRef(UserAccount user) {

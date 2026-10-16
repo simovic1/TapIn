@@ -84,6 +84,13 @@ class OutboxProcessor {
     private enum Outcome { SENT, RETRY, FAILED, LEASE_LOST }
 
     private Outcome deliver(OutboxEntry entry, Instant now) {
+        if (entry.expiresAt() != null && !now.isBefore(entry.expiresAt())) {
+            // Decision D-04: a message that missed its moment (reminder after the training started) is not sent.
+            boolean recorded = repository.markFailed(entry.id(), workerId, now,
+                    "Stale: not delivered before " + entry.expiresAt() + "; not sent any more.");
+            log.info("Outbox id={} {} expired at {}, not sent", entry.id(), entry.eventType(), entry.expiresAt());
+            return recorded ? Outcome.FAILED : Outcome.LEASE_LOST;
+        }
         SendResult result;
         try {
             EmailTemplateRenderer.Rendered rendered = renderer.render(entry.eventType(), entry.payload());

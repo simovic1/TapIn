@@ -127,6 +127,7 @@ public class RecurringScheduleService {
                 SessionEvent event = events.save(new SessionEvent(session.getId(), SessionEvent.Type.CANCELLED,
                         actorUserId, null, Map.of("reason", REMOVED_FROM_SCHEDULE, "source", "SCHEDULE"), now));
                 notifier.cancelled(session, event.getId(), zone);
+                notifier.discardReminders(session.getId());
                 continue;
             }
             Instant newStart = SessionMaterializer.toInstant(date, rule.getStartTime(), zone);

@@ -42,6 +42,8 @@ lozinke kao V006; V007–V009 isporučili su BJJ-13/17/19; dopuna početne aktiv
 | V009 | `V009__attendance_attendances_audit.sql` | attendance | `training_attendances` (UNMARKED kao redak – verzija nikad ne kreće ispočetka), `attendance_audit_logs` (append-only trigger) – BJJ-19 | 3 ✅ |
 | V010 | `V010__members_initial_activity_history.sql` | members | Početno stanje aktivnosti postojećih članstava – BJJ-11 (prije V007, preimenovano jer su V007–V009 već na masteru) | 1 ✅ |
 | V011 | `V011__belts_belt_periods_audit.sql` | belts | `member_belt_periods` (`uk_member_belt_periods_membership_effective`, efektivni datum = dodjela ili +1 dan), `belt_period_audit_logs` (append-only trigger) – BJJ-24 | 4 ✅ |
+| V012 | `V012__auth_training_reminder_preference.sql` | auth | `users.training_reminders_enabled` (zadano uključeno) – BJJ-29 | 5 ✅ |
+| V013 | `V013__notifications_outbox_expiry.sql` | notifications | `email_outbox.expires_at` (zastarjele poruke se ne šalju) – BJJ-29 | 5 ✅ |
 | R__ | `R__reporting_*.sql` | reporting | Read-only pogledi za statistiku | 6 |
 
 Admin seed (prvi administrator) **nije** u migraciji jer zahtijeva tajnu. Radi ga `AdminBootstrapService`

@@ -19,5 +19,6 @@ record OutboxEntry(
         String lastError,
         String lockedBy,
         Instant lockedUntil,
-        Instant sentAt) {
+        Instant sentAt,
+        Instant expiresAt) {
 }

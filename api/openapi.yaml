@@ -1350,6 +1350,7 @@ components:
         joinedOn: '2024-03-01'
         club: { name: BJJ klub, timeZone: Europe/Zagreb }
         version: 4
+        trainingRemindersEnabled: true
     CurrentUserMember:
       summary: Marko Marić (MEMBER)
       value:
@@ -1365,6 +1366,7 @@ components:
         joinedOn: '2024-03-01'
         club: { name: BJJ klub, timeZone: Europe/Zagreb }
         version: 4
+        trainingRemindersEnabled: true
     CurrentUserAdmin:
       summary: Iva Kovač (ADMIN, MEMBER)
       value:
@@ -1380,6 +1382,7 @@ components:
         joinedOn: '2024-03-01'
         club: { name: BJJ klub, timeZone: Europe/Zagreb }
         version: 4
+        trainingRemindersEnabled: true
 
   responses:
     BadRequest:
@@ -1760,7 +1763,7 @@ components:
         newPassword: { $ref: '#/components/schemas/Password' }
     CurrentUser:
       type: object
-      required: [userId, membershipId, email, firstName, lastName, phone, accountStatus, membershipStatus, roles, joinedOn, club, version]
+      required: [userId, membershipId, email, firstName, lastName, phone, accountStatus, membershipStatus, roles, joinedOn, club, version, trainingRemindersEnabled]
       properties:
         userId: { $ref: '#/components/schemas/UserId' }
         membershipId: { $ref: '#/components/schemas/MembershipId' }
@@ -1785,13 +1788,21 @@ components:
         version:
           $ref: '#/components/schemas/Version'
           description: Verzija korisničkog profila (za `PATCH /me/profile`).
+        trainingRemindersEnabled:
+          type: boolean
+          description: Prima li podsjetnik 3 sata prije treninga na koji je prijavljen (zadano `true`, odluka D-04).
     UpdateOwnProfileRequest:
       type: object
       additionalProperties: false
-      required: [expectedVersion, phone]
+      required: [expectedVersion]
+      minProperties: 2
+      description: 'Izostavljeno polje ostaje nepromijenjeno; `phone` s vrijednošću null briše telefon.'
       properties:
         expectedVersion: { $ref: '#/components/schemas/ExpectedVersion' }
         phone: { oneOf: [{ $ref: '#/components/schemas/Phone' }, { type: 'null' }] }
+        trainingRemindersEnabled:
+          type: boolean
+          description: Uključuje ili isključuje podsjetnik 3 sata prije treninga.
 
     # ---------------------------------------------------------------- members
     MemberSummary:

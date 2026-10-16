@@ -69,6 +69,7 @@ class NotificationCatalogIntegrationTest {
     @Autowired MutableClock clock;
     @Autowired OutboxProcessor processor;
     @Autowired EmailSender sender;
+    @Autowired com.tapin.registrations.TrainingReminderService reminders;
 
     ScriptedEmailSender recorder;
     TestUsers users;
@@ -185,6 +186,31 @@ class NotificationCatalogIntegrationTest {
                 .satisfies(m -> assertThat(m.textBody()).containsPattern("https://tapin\\.test/pozivnica#\\S+"));
         assertThat(mails).filteredOn(m -> m.to().equals("ana@klub.hr")).singleElement()
                 .satisfies(m -> assertThat(m.textBody()).containsPattern("https://tapin\\.test/nova-lozinka#\\S+"));
+    }
+
+    @Test
+    void reminderIsSentToRegisteredMembersAndNeverAfterTheTrainingStarted() throws Exception {
+        call(login("ana@klub.hr"), put("/api/v1/trainings/" + tuesday + "/my-registration"));
+        deliver();
+
+        clock.set(Instant.parse("2026-10-20T13:30:00Z")); // 15:30 Zagreb
+        assertThat(reminders.enqueueDue()).isEqualTo(1);
+        List<EmailMessage> mails = deliver();
+        assertThat(mails).extracting(EmailMessage::to).containsExactly("ana@klub.hr");
+        assertThat(mails.get(0).subject()).isEqualTo("Podsjetnik: Open mat, utorak 20. 10. 2026. u 18:30");
+        assertThat(mails.get(0).textBody()).contains("otkažite prijavu: https://tapin.test/treninzi/" + tuesday)
+                .contains("isključiti u postavkama profila");
+
+        // D-04: a reminder that could not be delivered before the start is stale and is never sent.
+        long thursday = session("2026-10-22T16:30:00Z", "SCHEDULED", null);
+        call(login("ana@klub.hr"), put("/api/v1/trainings/" + thursday + "/my-registration"));
+        clock.set(Instant.parse("2026-10-22T13:30:00Z"));
+        deliver(); // the confirmation
+        assertThat(reminders.enqueueDue()).isEqualTo(1);
+        clock.set(Instant.parse("2026-10-22T16:30:00Z")); // provider was down until the training started
+        assertThat(deliver()).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT status || ':' || left(last_error, 5) FROM email_outbox "
+                + "WHERE event_type = 'TRAINING_REMINDER' AND session_id = ?", String.class, thursday)).isEqualTo("FAILED:Stale");
     }
 
     // ---------------------------------------------------------------- helpers

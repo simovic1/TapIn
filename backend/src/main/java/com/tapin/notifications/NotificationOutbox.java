@@ -44,6 +44,17 @@ public class NotificationOutbox {
     }
 
     /**
+     * Withdraws messages of {@code type} for a session that are still waiting (e.g. reminders of a training that has
+     * just been cancelled, spec §8.2). Runs in the caller's transaction.
+     *
+     * @return number of withdrawn messages
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int discardPending(long sessionId, EmailEventType type, String reason) {
+        return repository.discardPending(sessionId, type, reason, clock.instant());
+    }
+
+    /**
      * Puts a FAILED message back into the queue with a fresh attempt budget (operator action after fixing the cause).
      * Messages whose secret payload was already wiped cannot be re-sent; the business action must be repeated
      * (e.g. resend the invitation).

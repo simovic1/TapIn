@@ -41,9 +41,9 @@ class OutboxRepository {
         int inserted = jdbc.update("""
                 INSERT INTO email_outbox (event_type, recipient_user_id, recipient_email, session_id, payload,
                                           redact_payload_after_send, deduplication_key, next_attempt_at,
-                                          created_at, updated_at)
+                                          created_at, updated_at, expires_at)
                 VALUES (:eventType, :recipientUserId, :recipientEmail, :sessionId, CAST(:payload AS jsonb),
-                        :redact, :deduplicationKey, :now, :now, :now)
+                        :redact, :deduplicationKey, :now, :now, :now, :expiresAt)
                 ON CONFLICT (deduplication_key) DO NOTHING
                 """, new MapSqlParameterSource()
                 .addValue("eventType", message.eventType().name())
@@ -53,6 +53,7 @@ class OutboxRepository {
                 .addValue("payload", jsonMapper.writeValueAsString(message.payload()))
                 .addValue("redact", message.containsSecret())
                 .addValue("deduplicationKey", message.deduplicationKey())
+                .addValue("expiresAt", message.expiresAt() == null ? null : ts(message.expiresAt()))
                 .addValue("now", ts(now)));
         return inserted == 1;
     }
@@ -161,7 +162,8 @@ class OutboxRepository {
                 rs.getString("last_error"),
                 rs.getString("locked_by"),
                 instant(rs, "locked_until"),
-                instant(rs, "sent_at"));
+                instant(rs, "sent_at"),
+                instant(rs, "expires_at"));
     }
 
     private static MapSqlParameterSource params(long id, String workerId, Instant now) {
@@ -175,6 +177,16 @@ class OutboxRepository {
     private static Instant instant(ResultSet rs, String column) throws SQLException {
         OffsetDateTime value = rs.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
+    }
+
+    /** PENDING, not currently being sent: FAILED with {@code reason} (e.g. reminders of a cancelled training). */
+    int discardPending(long sessionId, EmailEventType type, String reason, Instant now) {
+        return jdbc.update("""
+                UPDATE email_outbox SET status = 'FAILED', last_error = :reason, updated_at = :now
+                WHERE session_id = :session AND event_type = :type AND status = 'PENDING'
+                  AND (locked_until IS NULL OR locked_until < :now)
+                """, new MapSqlParameterSource("session", sessionId).addValue("type", type.name())
+                .addValue("reason", truncate(reason)).addValue("now", ts(now)));
     }
 
     static String truncate(String error) {

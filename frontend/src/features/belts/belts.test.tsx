@@ -54,6 +54,32 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe('own profile', () => {
+  it('switches the training reminder off and keeps the switch on a failed save', async () => {
+    let fail = true;
+    const fetch = mockApi({
+      'GET /api/v1/me': () => json(200, makeUser(['MEMBER'])),
+      'GET /api/v1/me/belts': () => json(200, history),
+      'PATCH /api/v1/me/profile': () =>
+        fail ? json(500, { type: 'x', title: 'x', status: 500, detail: 'x', instance: '/x', errorCode: 'INTERNAL_ERROR' })
+          : json(200, makeUser(['MEMBER'], { trainingRemindersEnabled: false, version: 2 })),
+    });
+    renderApp('/profil');
+    const user = userEvent.setup();
+    const toggle = await screen.findByRole('checkbox', { name: /Podsjetnik e-mailom 3 sata prije treninga/ });
+    expect(toggle).toBeChecked();
+
+    await user.click(toggle);
+    expect(await screen.findByText(/Postavka nije spremljena/)).toBeInTheDocument();
+    expect(toggle).toBeChecked();
+
+    fail = false;
+    await user.click(toggle);
+    expect(await screen.findByText('Podsjetnik je isključen.')).toBeInTheDocument();
+    expect(toggle).not.toBeChecked();
+    const patch = fetch.mock.calls.filter(([, init]) => init?.method === 'PATCH').at(-1)!;
+    expect(JSON.parse(String(patch[1]!.body))).toEqual({ expectedVersion: 1, trainingRemindersEnabled: false });
+  });
+
   it('explains a missing belt differently from unknown dates and unassigned trainings', async () => {
     mockApi({
       'GET /api/v1/me': () => json(200, makeUser(['MEMBER'])),

@@ -20,6 +20,7 @@ export function makeUser(roles: Role[], overrides: Partial<CurrentUser> = {}): C
     joinedOn: '2024-03-01',
     club: { name: 'BJJ klub', timeZone: 'Europe/Zagreb' },
     version: 1,
+    trainingRemindersEnabled: true,
     ...overrides,
   };
 }

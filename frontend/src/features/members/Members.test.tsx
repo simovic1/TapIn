@@ -123,6 +123,8 @@ describe('member management', () => {
     expect(await screen.findByText('Telefon je spremljen.')).toBeInTheDocument();
     const call = fetch.mock.calls.find(([url]) => String(url).endsWith('/me/profile'))!;
     expect(JSON.parse(String(call[1]!.body))).toEqual({ expectedVersion: own.version, phone: '+385 91 1234567' });
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    // No role or status controls; the only switch is the own reminder preference.
+    expect(screen.getAllByRole('checkbox').map(c => c.getAttribute('aria-label') ?? c.closest('label')?.textContent))
+      .toEqual([expect.stringMatching(/Podsjetnik/)]);
   });
 });

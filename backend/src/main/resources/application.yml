@@ -72,6 +72,11 @@ tapin:
     horizon-days: 60
     materialize-interval: 6h
     held-transition-interval: 1m
+  reminders:
+    # Reminder start_at - lead to REGISTERED members (spec §8.2); missed runs are caught up until the start (D-04).
+    enabled: ${REMINDERS_ENABLED:true}
+    lead: 3h
+    interval: 1m
   outbox:
     poll-interval: 10s
     batch-size: 20

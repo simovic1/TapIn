@@ -150,6 +150,20 @@ public class TrainingService {
         return result;
     }
 
+    /**
+     * Non-cancelled sessions that have not started yet and start at or before {@code until} (inclusive), i.e.
+     * whose reminder time ({@code start - lead}) has come when {@code until = now + lead}. Ordered by start.
+     */
+    @Transactional(readOnly = true)
+    public List<SessionRef> scheduledStartingBefore(Instant now, Instant until) {
+        ZoneId zone = directory.theClub().timeZone();
+        // + 1 µs (database precision) makes the half-open query include a start exactly at {@code until}.
+        return sessions.findStartingBetween(now, until.plusNanos(1_000), EnumSet.of(TrainingStatus.SCHEDULED)).stream()
+                .filter(s -> s.getStartAt().isAfter(now))
+                .map(s -> new SessionRef(s.getId(), s.getStatus(), s.getStartAt(), s.getEndAt(), notifier.emailValues(s, zone)))
+                .toList();
+    }
+
     /** Who can be assigned as a coach (active TRAINER/ADMIN memberships). */
     @Transactional(readOnly = true)
     public List<CoachView> coachCandidates() {
@@ -271,6 +285,7 @@ public class TrainingService {
         SessionEvent event = events.save(new SessionEvent(session.getId(), SessionEvent.Type.CANCELLED,
                 actor.userId(), Map.of("status", TrainingStatus.SCHEDULED.name()), values, now));
         String notification = notifier.cancelled(session, event.getId(), directory.theClub().timeZone());
+        notifier.discardReminders(session.getId());
         return new MutationResult(view(actor, session), true, notification);
     }
 

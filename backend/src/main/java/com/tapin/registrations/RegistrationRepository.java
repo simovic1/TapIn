@@ -77,6 +77,15 @@ class RegistrationRepository {
                 .addValue("actor", actorUserId).addValue("source", source).addValue("now", ts(now)), Long.class);
     }
 
+    /** REGISTERED members whose (latest) registration happened at or before {@code cutoff}. */
+    List<Long> registeredAtOrBefore(long trainingId, Instant cutoff) {
+        return jdbc.queryForList("""
+                SELECT membership_id FROM training_registrations
+                WHERE session_id = :session AND status = 'REGISTERED' AND registered_at <= :cutoff
+                ORDER BY membership_id
+                """, new MapSqlParameterSource("session", trainingId).addValue("cutoff", ts(cutoff)), Long.class);
+    }
+
     List<Long> activeMemberships(long trainingId) {
         return jdbc.queryForList("""
                 SELECT membership_id FROM training_registrations
