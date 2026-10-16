@@ -37,7 +37,7 @@ import java.util.Set;
  * outbox e-mail are written in one transaction: all or nothing.
  * <ul>
  *   <li>A trainer may record any club member: registered, cancelled (spec §5.2) or not registered at all (walk-in,
- *       AC-06). Inactive members are not added to a session that has not ended yet; historical entry is allowed.</li>
+ *       AC-06). Inactive members are not added to unfinished sessions; historical entry requires activity at session start.</li>
  *   <li>Idempotent: the same status again changes nothing - no audit, no e-mail (AC-10).</li>
  *   <li>Optimistic locking on {@code expectedVersion} for the first insert (version 0 = no record), updates and the
  *       return to UNMARKED. UNMARKED keeps the row and its growing version, so a stale request never succeeds after
@@ -56,10 +56,11 @@ public class AttendanceService {
     private final MembershipDirectory directory;
     private final NotificationOutbox outbox;
     private final Clock clock;
+    private final com.tapin.members.MemberDirectoryService activity;
 
     AttendanceService(AttendanceRepository attendances, ParticipationLock lock, TrainingService trainings,
                       RegistrationService registrations, MembershipDirectory directory, NotificationOutbox outbox,
-                      Clock clock) {
+                      Clock clock, com.tapin.members.MemberDirectoryService activity) {
         this.attendances = attendances;
         this.lock = lock;
         this.trainings = trainings;
@@ -67,6 +68,7 @@ public class AttendanceService {
         this.directory = directory;
         this.outbox = outbox;
         this.clock = clock;
+        this.activity = activity;
     }
 
     // ------------------------------------------------------------------ API shapes
@@ -94,7 +96,7 @@ public class AttendanceService {
 
     public record AuditEntry(long auditId, long trainingId, long membershipId, long actorUserId,
                              AttendanceStatus previousStatus, AttendanceStatus newStatus, AttendanceSource source,
-                             String note, Instant occurredAt) {
+                             String note, Instant occurredAt, String actorName, String memberName) {
     }
 
     public record PageMetadata(int page, int size, long totalElements, int totalPages) {
@@ -176,9 +178,16 @@ public class AttendanceService {
             return result(trainingId, member, current, false, EnqueueResult.DUPLICATE); // AC-10
         }
         Instant now = clock.instant();
+        if (source == AttendanceSource.HISTORICAL_IMPORT && !session.hasEnded(now)) {
+            throw ApiException.businessRule("Povijesni unos dopušten je samo za završeni trening.");
+        }
         if (target != AttendanceStatus.UNMARKED) {
             if (session.status() == TrainingStatus.CANCELLED) {
                 throw new ApiException(ErrorCode.TRAINING_CANCELLED, "Trening je otkazan; dolazak se ne evidentira.");
+            }
+            if (session.hasEnded(now) && currentStatus == AttendanceStatus.UNMARKED
+                    && !activity.activeAt(membershipId, session.startAt())) {
+                throw new ApiException(ErrorCode.MEMBERSHIP_INACTIVE, "Član nije bio aktivan na datum treninga.");
             }
             if (member.status() != MembershipStatus.ACTIVE && !session.hasEnded(now)) {
                 throw new ApiException(ErrorCode.MEMBERSHIP_INACTIVE,
@@ -189,7 +198,10 @@ public class AttendanceService {
         if (currentVersion != expectedVersion) {
             throw conflict(trainingId, member, current);
         }
-        AttendanceResult written = write(actor, session, member, current, target, source, note, now);
+        AttendanceSource actualSource = target == AttendanceStatus.UNMARKED || currentStatus != AttendanceStatus.UNMARKED
+                ? AttendanceSource.CORRECTION
+                : session.hasEnded(now) ? AttendanceSource.HISTORICAL_IMPORT : source;
+        AttendanceResult written = write(actor, session, member, current, target, actualSource, note, now);
         if (written == null) {
             throw conflict(trainingId, member, attendances.find(trainingId, membershipId).orElse(null));
         }
@@ -236,7 +248,8 @@ public class AttendanceService {
             if (current != null && current.status() != AttendanceStatus.UNMARKED) {
                 continue;
             }
-            if (member.status() != MembershipStatus.ACTIVE && !session.hasEnded(now)) {
+            if ((session.hasEnded(now) && !activity.activeAt(id, session.startAt()))
+                    || (member.status() != MembershipStatus.ACTIVE && !session.hasEnded(now))) {
                 continue; // same rule as single writes: inactive members are not added to a running session
             }
             AttendanceResult result = write(actor, session, member, current, AttendanceStatus.ABSENT,
@@ -292,7 +305,7 @@ public class AttendanceService {
 
     private static AuditEntry entry(AuditRow r) {
         return new AuditEntry(r.auditId(), r.trainingId(), r.membershipId(), r.actorUserId(), r.previousStatus(),
-                r.newStatus(), r.source(), r.note(), r.occurredAt());
+                r.newStatus(), r.source(), r.note(), r.occurredAt(), r.actorName(), r.memberName());
     }
 
     private static AttendanceResult result(long trainingId, MemberRef m, Attendance a, boolean changed,

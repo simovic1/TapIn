@@ -39,14 +39,17 @@ export function RosterRow({
   trainingId,
   entry,
   disabled,
+  historical = false,
   onConfirmed,
 }: {
   trainingId: number;
   entry: RosterEntry;
   disabled: boolean;
+  historical?: boolean;
   onConfirmed: (entry: RosterEntry) => void;
 }) {
   const [state, setState] = useState<SaveState>({ kind: 'idle' });
+  const [note, setNote] = useState('');
   const saving = state.kind === 'saving';
   const name = `${entry.firstName} ${entry.lastName}`;
 
@@ -55,8 +58,8 @@ export function RosterRow({
     setState({ kind: 'saving', target });
     const request =
       target === 'UNMARKED'
-        ? resetAttendance(trainingId, entry.membershipId, entry.attendanceVersion)
-        : setAttendance(trainingId, entry.membershipId, target, entry.attendanceVersion);
+        ? resetAttendance(trainingId, entry.membershipId, entry.attendanceVersion, note)
+        : setAttendance(trainingId, entry.membershipId, target, entry.attendanceVersion, note, entry.attendanceStatus !== 'UNMARKED' ? 'CORRECTION' : historical ? 'HISTORICAL_IMPORT' : 'SINGLE');
     request.then(
       (result: AttendanceResult) => {
         onConfirmed({
@@ -126,6 +129,9 @@ export function RosterRow({
           {REGISTRATION_LABELS[entry.registrationStatus ?? 'NONE']} · <span className="font-medium">{ATTENDANCE_LABELS[current]}</span>
         </p>
       </div>
+      <label className="text-sm">Napomena za {name}
+        <input className="block w-full rounded border p-2" maxLength={500} value={note} disabled={saving} onChange={e => setNote(e.target.value)} />
+      </label>
       <div className="flex gap-2">
         {button('PRESENT')}
         {button('ABSENT')}

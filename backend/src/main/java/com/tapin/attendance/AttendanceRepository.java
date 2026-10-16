@@ -28,7 +28,7 @@ class AttendanceRepository {
     }
 
     record AuditRow(long auditId, long trainingId, long membershipId, long actorUserId, AttendanceStatus previousStatus,
-                    AttendanceStatus newStatus, AttendanceSource source, String note, Instant occurredAt) {
+                    AttendanceStatus newStatus, AttendanceSource source, String note, Instant occurredAt, String actorName, String memberName) {
     }
 
     private final NamedParameterJdbcTemplate jdbc;
@@ -89,16 +89,18 @@ class AttendanceRepository {
     /** Newest first. */
     List<AuditRow> audit(long trainingId, Long membershipId, int page, int size) {
         return jdbc.query("""
-                SELECT * FROM attendance_audit_logs
+                SELECT a.*, u.first_name || ' ' || u.last_name AS actor_name, m.first_name || ' ' || m.last_name AS member_name
+                FROM attendance_audit_logs a JOIN users u ON u.id=a.actor_user_id
+                JOIN club_memberships cm ON cm.id=a.membership_id JOIN users m ON m.id=cm.user_id
                 WHERE session_id = :session AND (CAST(:membership AS BIGINT) IS NULL OR membership_id = :membership)
-                ORDER BY occurred_at DESC, id DESC
+                ORDER BY occurred_at DESC, a.id DESC
                 LIMIT :size OFFSET :offset
                 """, auditParams(trainingId, membershipId).addValue("size", size).addValue("offset", (long) page * size),
                 (rs, row) -> new AuditRow(rs.getLong("id"), rs.getLong("session_id"), rs.getLong("membership_id"),
                         rs.getLong("actor_user_id"), AttendanceStatus.valueOf(rs.getString("old_status")),
                         AttendanceStatus.valueOf(rs.getString("new_status")),
                         AttendanceSource.valueOf(rs.getString("action_source")), rs.getString("note"),
-                        instant(rs, "occurred_at")));
+                        instant(rs, "occurred_at"), rs.getString("actor_name"), rs.getString("member_name")));
     }
 
     long auditCount(long trainingId, Long membershipId) {

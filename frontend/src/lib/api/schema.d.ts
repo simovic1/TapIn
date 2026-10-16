@@ -1384,6 +1384,10 @@ export interface components {
             trainingId: components["schemas"]["TrainingId"];
             membershipId: components["schemas"]["MembershipId"];
             actorUserId: components["schemas"]["UserId"];
+            /** @description Trenutno ime autora; actorUserId je trajni identitet. */
+            actorName?: string;
+            /** @description Trenutno ime člana. */
+            memberName?: string;
             previousStatus: components["schemas"]["AttendanceStatus"];
             newStatus: components["schemas"]["AttendanceStatus"];
             source: components["schemas"]["AttendanceSource"];

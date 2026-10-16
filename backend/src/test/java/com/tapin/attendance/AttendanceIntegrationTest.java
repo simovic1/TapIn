@@ -93,6 +93,7 @@ class AttendanceIntegrationTest {
         TestUsers.Created created = users.active("ana@klub.hr", "MEMBER");
         ana = created.membershipId();
         anaUser = created.userId();
+        jdbc.update("INSERT INTO membership_status_events (membership_id,new_status,effective_at) VALUES (?, 'ACTIVE', TIMESTAMPTZ '2024-03-01T00:00:00Z')", ana);
         jdbc.update("UPDATE users SET first_name = 'Ana', last_name = 'Horvat' WHERE id = ?", anaUser);
         trainerUser = users.active("trener@klub.hr", "MEMBER", "TRAINER").userId();
         trainer = login("trener@klub.hr");
@@ -336,6 +337,42 @@ class AttendanceIntegrationTest {
                 .andExpect(status().isOk());
         assertThat(jdbc.queryForObject("SELECT action_source FROM attendance_audit_logs", String.class))
                 .isEqualTo("HISTORICAL_IMPORT");
+    }
+
+    @Test
+    void historicalSourceCannotBeUsedOnAnUnfinishedTraining() throws Exception {
+        putAttendance(trainer, ana, training, Map.of("status", "PRESENT", "expectedVersion", 0, "source", "HISTORICAL_IMPORT"))
+                .andExpect(status().isUnprocessableContent());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM attendance_audit_logs", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM email_outbox", Integer.class)).isZero();
+    }
+
+    @Test
+    void historicalEntryChecksActivityAtTrainingDateAndPreservesEventTime() throws Exception {
+        jdbc.update("UPDATE club_memberships SET status='INACTIVE' WHERE id=?", ana);
+        jdbc.update("INSERT INTO membership_status_events (membership_id,old_status,new_status,effective_at) VALUES (?, 'ACTIVE','INACTIVE', TIMESTAMPTZ '2026-09-01T00:00:00Z')", ana);
+        long inactivePeriod = insertSession("2026-09-15T16:30:00Z", "2026-09-15T18:00:00Z", "HELD");
+        putAttendance(trainer, ana, inactivePeriod, Map.of("status", "PRESENT", "expectedVersion", 0, "source", "HISTORICAL_IMPORT"))
+                .andExpect(status().isUnprocessableContent());
+        long activePeriod = insertSession("2026-08-15T16:30:00Z", "2026-08-15T18:00:00Z", "HELD");
+        putAttendance(trainer, ana, activePeriod, Map.of("status", "PRESENT", "expectedVersion", 0, "note", "Stari zapis"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.notificationStatus").value("QUEUED"));
+        putAttendance(trainer, ana, activePeriod, Map.of("status", "ABSENT", "expectedVersion", 1, "note", "Ispravak"))
+                .andExpect(status().isOk());
+        mvc.perform(delete("/api/v1/trainings/" + activePeriod + "/attendance/" + ana)
+                .session(trainer).with(csrf()).param("expectedVersion", "2").param("note", "Ponisteno"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/trainings/" + activePeriod + "/attendance/audit").session(trainer)
+                .param("membershipId", String.valueOf(ana)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].newStatus").value("UNMARKED"))
+                .andExpect(jsonPath("$.items[0].source").value("CORRECTION"))
+                .andExpect(jsonPath("$.items[0].note").value("Ponisteno"))
+                .andExpect(jsonPath("$.items[0].memberName").value("Ana Horvat"))
+                .andExpect(jsonPath("$.items[0].actorName").isString())
+                .andExpect(jsonPath("$.items[2].source").value("HISTORICAL_IMPORT"));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM email_outbox", Integer.class)).isEqualTo(3);
+        assertThat(jdbc.queryForObject("SELECT start_at FROM training_sessions WHERE id=?", java.sql.Timestamp.class, activePeriod).toInstant())
+                .isEqualTo(Instant.parse("2026-08-15T16:30:00Z"));
     }
 
     @Test

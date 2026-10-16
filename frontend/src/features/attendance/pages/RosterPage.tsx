@@ -19,6 +19,7 @@ import {
   type Roster,
   type RosterEntry,
 } from '../api';
+import { AuditHistory } from '../components/AuditHistory';
 import { RosterRow } from '../components/RosterRow';
 
 /** Trainer's roll call (spec §6.2, §12.2): counters, one row per member, adding walk-ins and the bulk action. */
@@ -42,6 +43,7 @@ export function RosterPage() {
 function RosterView({ trainingId, roster }: { trainingId: number; roster: Roster }) {
   const apply = useApplyRosterEntry(trainingId);
   const t = roster.training;
+  const historical = Date.parse(t.endAt) <= Date.now();
   const cancelled = t.status === 'CANCELLED';
   const started = Date.parse(t.startAt) <= Date.now();
   const onRoster = new Set(roster.entries.map((e) => e.membershipId));
@@ -59,6 +61,8 @@ function RosterView({ trainingId, roster }: { trainingId: number; roster: Roster
           <Alert tone="error" title="Trening je otkazan">Dolasci se ne evidentiraju.</Alert>
         </div>
       )}
+      <Alert tone="warning">Svaka stvarna promjena dolaska, uključujući povijesni unos i poništavanje oznake, šalje članu e-mail obavijest. Kod unosa više članova nastaje zasebna obavijest za svakoga.</Alert>
+      {historical && <p className="my-3">Povijesna evidencija pripada datumu treninga, ne današnjem datumu unosa. Za novi unos član mora biti aktivan na datum treninga.</p>}
       <Counters roster={roster} />
       <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">
         Svaki odabir sprema se odmah; nema gumba „Spremi”. Treneri na treningu su informativni – svaki trener može evidentirati.
@@ -71,13 +75,14 @@ function RosterView({ trainingId, roster }: { trainingId: number; roster: Roster
       ) : (
         <ul className="mb-6 flex flex-col gap-2" aria-label="Članovi na prozivci">
           {roster.entries.map((entry) => (
-            <RosterRow key={entry.membershipId} trainingId={trainingId} entry={entry} disabled={cancelled} onConfirmed={apply} />
+            <RosterRow key={entry.membershipId} trainingId={trainingId} entry={entry} historical={historical} disabled={cancelled} onConfirmed={apply} />
           ))}
         </ul>
       )}
 
-      {!cancelled && <AddMember trainingId={trainingId} onRoster={onRoster} />}
+      {!cancelled && <AddMember trainingId={trainingId} historical={historical} onRoster={onRoster} />}
       {!cancelled && <BulkAbsent trainingId={trainingId} roster={roster} started={started} />}
+      <AuditHistory trainingId={trainingId} entries={roster.entries} />
     </>
   );
 }
@@ -103,18 +108,19 @@ function Counters({ roster }: { roster: Roster }) {
 }
 
 /** Walk-in (AC-06): search active members and mark them present directly. */
-function AddMember({ trainingId, onRoster }: { trainingId: number; onRoster: Set<number> }) {
+function AddMember({ trainingId, onRoster, historical }: { trainingId: number; onRoster: Set<number>; historical: boolean }) {
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState<number>();
   const [message, setMessage] = useState<{ tone: 'success' | 'error' | 'warning'; text: string }>();
-  const search = useMemberSearch(q);
+  const [note, setNote] = useState('');
+  const search = useMemberSearch(q, historical);
   const queryClient = useQueryClient();
   const results = (search.data ?? []).filter((m) => !onRoster.has(m.membershipId));
 
   const add = (membershipId: number, name: string) => {
     setBusy(membershipId);
     setMessage(undefined);
-    setAttendance(trainingId, membershipId, 'PRESENT', 0)
+    setAttendance(trainingId, membershipId, 'PRESENT', 0, note, historical ? 'HISTORICAL_IMPORT' : 'SINGLE')
       .then(
         () => setMessage({ tone: 'success', text: `${name} je dodan(a) kao prisutan/prisutna.` }),
         (error: unknown) =>
@@ -136,6 +142,7 @@ function AddMember({ trainingId, onRoster }: { trainingId: number; onRoster: Set
         Dodaj člana koji nije prijavljen
       </h2>
       <TextField label="Pretraži članove" value={q} onChange={(e) => setQ(e.target.value)} hint="Ime, prezime ili e-mail (najmanje 2 znaka)." />
+      <TextField label="Napomena pri dodavanju" maxLength={500} value={note} onChange={e => setNote(e.target.value)} />
       {message && (
         <div className="mt-3">
           <Alert tone={message.tone}>{message.text}</Alert>
@@ -148,7 +155,7 @@ function AddMember({ trainingId, onRoster }: { trainingId: number; onRoster: Set
       )}
       {q.trim().length >= 2 && search.isSuccess && (
         <ul className="mt-3 flex flex-col gap-2">
-          {results.length === 0 && <li className="text-sm text-slate-600 dark:text-slate-400">Nema aktivnih članova izvan prozivke.</li>}
+          {results.length === 0 && <li className="text-sm text-slate-600 dark:text-slate-400">Nema pronađenih članova izvan prozivke.</li>}
           {results.map((m) => {
             const name = `${m.firstName} ${m.lastName}`;
             return (

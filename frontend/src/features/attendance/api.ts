@@ -41,13 +41,13 @@ export function useRollCallSessions() {
 }
 
 /** Active members by name or e-mail, for adding someone who came without registering (AC-06). */
-export function useMemberSearch(q: string) {
+export function useMemberSearch(q: string, historical = false) {
   const query = q.trim();
   return useQuery({
-    queryKey: attendanceKeys.memberSearch(query),
+    queryKey: [...attendanceKeys.memberSearch(query), historical],
     queryFn: () =>
       apiFetch<Schemas['MemberSummaryPage']>(
-        `/members?q=${encodeURIComponent(query)}&membershipStatus=ACTIVE&size=10`,
+        `/members?q=${encodeURIComponent(query)}${historical ? "" : "&membershipStatus=ACTIVE"}&size=10`,
       ).then((page) => page.items),
     enabled: query.length >= 2,
     staleTime: 60_000,
@@ -81,16 +81,16 @@ export function useApplyRosterEntry(trainingId: number) {
     });
 }
 
-export function setAttendance(trainingId: number, membershipId: number, status: AttendanceMark, expectedVersion: number) {
+export function setAttendance(trainingId: number, membershipId: number, status: AttendanceMark, expectedVersion: number, note?: string, source?: 'SINGLE' | 'CORRECTION' | 'HISTORICAL_IMPORT') {
   return apiFetch<AttendanceResult>(`/trainings/${trainingId}/attendance/${membershipId}`, {
     method: 'PUT',
-    body: JSON.stringify({ status, expectedVersion }),
+    body: JSON.stringify({ status, expectedVersion, note, source }),
   });
 }
 
-export function resetAttendance(trainingId: number, membershipId: number, expectedVersion: number) {
+export function resetAttendance(trainingId: number, membershipId: number, expectedVersion: number, note?: string) {
   return apiFetch<AttendanceResult>(
-    `/trainings/${trainingId}/attendance/${membershipId}?expectedVersion=${expectedVersion}`,
+    `/trainings/${trainingId}/attendance/${membershipId}?expectedVersion=${expectedVersion}&note=${encodeURIComponent(note ?? "")}`,
     { method: 'DELETE' },
   );
 }

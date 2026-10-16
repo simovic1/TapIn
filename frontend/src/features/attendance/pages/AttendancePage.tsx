@@ -21,6 +21,7 @@ export function AttendancePage() {
   return (
     <section className="max-w-3xl">
       <PageHeader title="Prozivka" description="Odaberite trening za evidenciju dolazaka." />
+      <p className="mb-4"><Link className="underline" to="/treninzi/novi">Dodaj trening (uključujući povijesni)</Link> · <Link className="underline" to="/treninzi">Kalendar i stara evidencija</Link></p>
       <QueryState
         query={sessions}
         loadingLabel="Učitavanje treninga…"

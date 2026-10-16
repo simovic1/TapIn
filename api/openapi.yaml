@@ -2279,6 +2279,8 @@ components:
         trainingId: { $ref: '#/components/schemas/TrainingId' }
         membershipId: { $ref: '#/components/schemas/MembershipId' }
         actorUserId: { $ref: '#/components/schemas/UserId' }
+        actorName: { type: string, description: Trenutno ime autora; actorUserId je trajni identitet. }
+        memberName: { type: string, description: Trenutno ime člana. }
         previousStatus: { $ref: '#/components/schemas/AttendanceStatus' }
         newStatus: { $ref: '#/components/schemas/AttendanceStatus' }
         source: { $ref: '#/components/schemas/AttendanceSource' }

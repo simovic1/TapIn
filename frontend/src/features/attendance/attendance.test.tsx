@@ -97,7 +97,7 @@ describe('roll call', () => {
     expect(counter('Prisutni')).toHaveTextContent('1');
     expect(counter('Nepotvrđeni')).toHaveTextContent('1');
     const put = fetch.mock.calls.find(([url]) => String(url).endsWith('/attendance/1'))!;
-    expect(JSON.parse(String(put[1]!.body))).toEqual({ status: 'PRESENT', expectedVersion: 0 });
+    expect(JSON.parse(String(put[1]!.body))).toEqual({ status: 'PRESENT', expectedVersion: 0, note: '', source: 'SINGLE' });
   });
 
   it('does not show a failed save as saved and retries with the same choice', async () => {
@@ -209,7 +209,7 @@ describe('roll call', () => {
     expect(await screen.findByText(/Marko Test je dodan/)).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: 'Prisutan: Marko Test' })).toHaveAttribute('aria-pressed', 'true');
     const put = fetch.mock.calls.find(([url]) => String(url).endsWith('/attendance/7'))!;
-    expect(JSON.parse(String(put[1]!.body))).toEqual({ status: 'PRESENT', expectedVersion: 0 });
+    expect(JSON.parse(String(put[1]!.body))).toEqual({ status: 'PRESENT', expectedVersion: 0, note: '', source: 'SINGLE' });
     expect(String(fetch.mock.calls.find(([url]) => String(url).startsWith('/api/v1/members'))![0])).toContain('membershipStatus=ACTIVE');
   });
 
@@ -224,5 +224,49 @@ describe('roll call', () => {
     renderApp('/prozivka/1');
     expect(await screen.findByRole('heading', { name: 'Nemate pristup' })).toBeInTheDocument();
     void problem;
+  });
+});
+
+
+describe('historical attendance and audit', () => {
+  it('includes currently inactive members when searching a past training', async () => {
+    const fetch = mockApi({
+      'GET /api/v1/me': trainer,
+      'GET /api/v1/trainings/1/roster': () => json(200, { ...roster([]), training: { ...training, status: 'HELD', startAt: '2026-08-15T16:30:00Z', endAt: '2026-08-15T18:00:00Z' } }),
+      'GET /api/v1/members': () => json(200, { items: [{ membershipId: 5, userId: 105, firstName: 'Bivsi', lastName: 'Clan', membershipStatus: 'INACTIVE' }], page: { page: 0, size: 10, totalPages: 1, totalElements: 1 } }),
+    });
+    renderApp('/prozivka/1');
+    await userEvent.setup().type(await screen.findByLabelText('Pretraži članove'), 'Bivsi');
+    expect(await screen.findByText('Bivsi Clan')).toBeInTheDocument();
+    const searches = fetch.mock.calls.filter(([url]) => String(url).startsWith('/api/v1/members?'));
+    expect(searches.length).toBeGreaterThan(0);
+    expect(searches.every(([url]) => !String(url).includes('membershipStatus=ACTIVE'))).toBe(true);
+  });
+
+  it('sends a historical source and note, then shows a read-only filtered audit', async () => {
+    const user = userEvent.setup();
+    const fetch = mockApi({
+      'GET /api/v1/me': trainer,
+      'GET /api/v1/trainings/1/roster': () => json(200, { ...roster([ana]), training: { ...training, status: 'HELD', startAt: '2026-08-15T16:30:00Z', endAt: '2026-08-15T18:00:00Z' } }),
+      'PUT /api/v1/trainings/1/attendance/1': () => json(200, result(ana, 'PRESENT', 1)),
+      'DELETE /api/v1/trainings/1/attendance/1': () => json(200, result(ana, 'UNMARKED', 2)),
+      'GET /api/v1/trainings/1/attendance/audit': () => json(200, { items: [{ auditId: 1, trainingId: 1, membershipId: 1, actorUserId: 9, actorName: 'Ivan Trener', memberName: 'Ana Test', previousStatus: 'PRESENT', newStatus: 'UNMARKED', source: 'CORRECTION', note: 'Krivi unos', occurredAt: NOW.toISOString() }], page: { page: 0, size: 20, totalElements: 1, totalPages: 1 } }),
+    });
+    renderApp('/prozivka/1');
+    await screen.findByText('Ana Test');
+    expect(screen.getByText(/zasebna obavijest za svakoga/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Napomena za Ana Test'), 'Stara biljeznica');
+    await user.click(screen.getByRole('button', { name: 'Prisutan: Ana Test' }));
+    await screen.findByText('Spremljeno');
+    const call = fetch.mock.calls.find(([url, init]) => String(url).endsWith('/attendance/1') && init?.method === 'PUT');
+    expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ source: 'HISTORICAL_IMPORT', note: 'Stara biljeznica', expectedVersion: 0 });
+    await user.click(screen.getByRole('button', { name: 'Poništi oznaku' }));
+    await waitFor(() => expect(fetch.mock.calls.some(([url, init]) => init?.method === 'DELETE' && String(url).includes('expectedVersion=1&note=Stara%20biljeznica'))).toBe(true));
+    await user.click(screen.getByRole('button', { name: 'Prikaži povijest' }));
+    expect(await screen.findByText(/Autor: Ivan Trener/)).toBeInTheDocument();
+    expect(screen.getByText('Ana Test: Prisutan → Nije označeno')).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('Član u povijesti'), '1');
+    await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).includes('membershipId=1'))).toBe(true));
+    expect(screen.queryByRole('button', { name: /Obriši audit|Uredi audit/ })).not.toBeInTheDocument();
   });
 });
