@@ -1184,7 +1184,11 @@ paths:
       tags: [Reports]
       operationId: getAttendanceReport
       summary: Statistika dolazaka po članovima
-      description: Broje se treninzi (ne sati), samo `PRESENT` na `HELD` terminima, po lokalnom datumu treninga.
+      description: |
+        Broje se treninzi (ne sati), samo PRESENT na HELD terminima, po lokalnom datumu treninga.
+        Brojači mjeseca i 7/30 dana presjek su odabranog razdoblja s prozorima koji završavaju danas.
+        lastPresentOn dolazi iz cijele povijesti. Prosjek je filtrirani broj dolazaka / svi HELD termini
+        u razdoblju, uključujući prazne termine. Nulti nazivnik daje null; UNMARKED nije evidentirana prijava.
       x-roles: [TRAINER, ADMIN]
       parameters:
         - $ref: '#/components/parameters/ReportFrom'
@@ -1215,13 +1219,17 @@ paths:
       description: |
         Isti filteri kao `/reports/attendance`, bez paginacije (svi redovi). Format za Excel (hr):
         UTF-8 s BOM-om, separator `;`, decimalni zarez, datumi `dd.MM.yyyy.`, CRLF.
-        Stupci: `Prezime;Ime;E-mail;Pojas;Dolasci ukupno;Dolasci u mjesecu;Zadnjih 7 dana;Zadnjih 30 dana;Prijave bez dolaska;Postotak nedolazaka;Zadnji dolazak`.
+        Stupci: `Prezime;Ime;E-mail;Pojas;Dolasci ukupno;Dolasci u mjesecu;Zadnjih 7 dana;Zadnjih 30 dana;Prijave bez dolaska;Postotak nedolazaka;Zadnji dolazak;Evidentirane prijave;Nepotvrđene prijave`.
+        Tekst je citiran, dvostruki navodnici su udvostručeni, a tekst koji nakon razmaka/kontrolnih znakova počinje s =,+,-,@ dobiva apostrof.
       x-roles: [TRAINER, ADMIN]
       parameters:
         - $ref: '#/components/parameters/ReportFrom'
         - $ref: '#/components/parameters/ReportTo'
         - $ref: '#/components/parameters/ReportMembershipId'
         - $ref: '#/components/parameters/ReportBelt'
+        - name: sort
+          in: query
+          schema: { type: string, default: 'presentCount,desc' }
       responses:
         '200':
           description: CSV datoteka
@@ -1241,6 +1249,10 @@ paths:
       tags: [Reports]
       operationId: listInactiveMembers
       summary: Aktivni članovi koji dugo nisu dolazili
+      description: |
+        Neovisan pregled cijele povijesti do danas u Europe/Zagreb. Prag je uključiv (razlika kalendarskih
+        datuma >= days). Član bez dolazaka ulazi kada je prošlo days dana od joinedOn;
+        lastPresentOn i daysSinceLastPresent ostaju null. Neaktivna članstva nisu u ovom popisu.
       x-roles: [TRAINER, ADMIN]
       parameters:
         - name: days
@@ -1387,7 +1399,7 @@ components:
     ReportBelt:
       name: belt
       in: query
-      description: Filter po trenutačnom pojasu.
+      description: D-05 – filter po trenutačnom pojasu člana; ne ograničava dolaske na povijesno razdoblje tog pojasa.
       schema: { $ref: '#/components/schemas/CurrentBelt' }
 
   headers:
@@ -2482,10 +2494,13 @@ components:
     # ---------------------------------------------------------------- reports
     MemberAttendanceRow:
       type: object
-      required: [membershipId, userId, firstName, lastName, currentBelt, membershipStatus, presentCount, presentThisMonth, presentLast7Days, presentLast30Days, registeredButAbsent, noShowRate, lastPresentOn]
+      required: [membershipId, userId, firstName, lastName, currentBelt, membershipStatus, presentCount, presentThisMonth, presentLast7Days, presentLast30Days, registeredButAbsent, noShowRate, lastPresentOn, email, decidedRegistrations, unmarkedRegistrations]
       properties:
         membershipId: { $ref: '#/components/schemas/MembershipId' }
         userId: { $ref: '#/components/schemas/UserId' }
+        email: { type: string }
+        decidedRegistrations: { type: integer, minimum: 0 }
+        unmarkedRegistrations: { type: integer, minimum: 0 }
         firstName: { type: string }
         lastName: { type: string }
         currentBelt: { $ref: '#/components/schemas/CurrentBelt' }
@@ -2512,11 +2527,20 @@ components:
         to: { type: string, format: date }
         totals:
           type: object
-          required: [heldSessions, totalPresent, averagePresentPerSession, monthly]
+          required: [heldSessions, totalPresent, averagePresentPerSession, monthly, sessions]
           properties:
             heldSessions: { type: integer, minimum: 0 }
             totalPresent: { type: integer, minimum: 0 }
             averagePresentPerSession: { type: [number, 'null'], minimum: 0 }
+            sessions:
+              type: array
+              items:
+                type: object
+                required: [trainingId, localDate, totalPresent]
+                properties:
+                  trainingId: { $ref: '#/components/schemas/TrainingId' }
+                  localDate: { type: string, format: date }
+                  totalPresent: { type: integer, minimum: 0 }
             monthly:
               type: array
               items:

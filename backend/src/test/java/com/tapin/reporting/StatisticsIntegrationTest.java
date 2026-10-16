@@ -100,6 +100,76 @@ class StatisticsIntegrationTest {
     }
 
     @Test
+    void reportBeltFilterPaginationAndExclusiveEndAreSharedWithExport() throws Exception {
+        jdbc.update("INSERT INTO member_belt_periods (membership_id,belt,effective_from_date,created_by_user_id) VALUES (?, 'BLUE', DATE '2026-10-16', ?)",ana,trainerUser);
+        JsonNode report=body(trainer,get("/api/v1/reports/attendance").param("from","2026-09-01").param("to","2026-10-15").param("belt","BLUE").param("size","1"));
+        assertThat(report.get("items").get(0).get("presentCount").asInt()).isEqualTo(3); // past white/unknown belt still counts; 15 Oct excluded
+        assertThat(report.get("page").get("totalElements").asInt()).isEqualTo(1);
+        assertThat(report.get("totals").get("monthly").size()).isEqualTo(2);
+        JsonNode second=body(trainer,get("/api/v1/reports/attendance").param("from","2026-09-01").param("to","2026-10-15").param("belt","BLUE").param("size","1").param("page","1"));
+        assertThat(second.get("items").isEmpty()).isTrue();
+        var csv=mvc.perform(get("/api/v1/reports/attendance.csv").session(trainer).param("from","2026-09-01").param("to","2026-10-15").param("belt","BLUE"))
+            .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(csv).contains("\"BLUE\";3;").doesNotContain("trener@klub.hr");
+        clock.set(Instant.parse("2026-10-29T10:00:00Z"));
+        assertThat(body(trainer,get("/api/v1/reports/inactive-members").param("days","14")).get("items").toString()).contains("\"membershipId\":"+ana);
+        assertThat(body(trainer,get("/api/v1/reports/inactive-members").param("days","30")).get("items").toString()).doesNotContain("\"membershipId\":"+ana);
+        JsonNode empty=body(trainer,get("/api/v1/reports/attendance").param("from","2025-01-01").param("to","2025-02-01"));
+        assertThat(empty.get("totals").get("averagePresentPerSession").isNull()).isTrue();
+        assertThat(empty.get("items").get(0).get("noShowRate").isNull()).isTrue();
+    }
+
+    @Test
+    void csvQuotesAndNeutralizesFormulaPrefixes() {
+        for (String text: List.of("=1+1", "+SUM(A1)", "-1+2", "@SUM(A1)", "\t=1", "\r\n@x", "\u00a0=1"))
+            assertThat(ClubReportsController.text(text)).startsWith("\"'").endsWith("\"");
+        assertThat(ClubReportsController.text("Član;\"Ana\"\nHorvat")).isEqualTo("\"Član;\"\"Ana\"\"\nHorvat\"");
+    }
+
+    @Test
+    void clubReportUsesIdenticalFiltersAndDenominatorsForCsv() throws Exception {
+        JsonNode report=body(trainer,get("/api/v1/reports/attendance").param("from","2026-10-01").param("to","2026-11-01").param("membershipId",String.valueOf(ana)));
+        JsonNode row=report.get("items").get(0);
+        assertThat(row.get("presentCount").asInt()).isEqualTo(2);
+        assertThat(row.get("registeredButAbsent").asInt()).isEqualTo(1);
+        assertThat(row.get("decidedRegistrations").asInt()).isEqualTo(1);
+        assertThat(row.get("unmarkedRegistrations").asInt()).isEqualTo(1);
+        assertThat(row.get("noShowRate").asDouble()).isEqualTo(1.0);
+        assertThat(report.get("totals").get("heldSessions").asInt()).isEqualTo(4);
+        assertThat(report.get("totals").get("averagePresentPerSession").asDouble()).isEqualTo(0.5);
+        jdbc.update("UPDATE users SET first_name=? WHERE id=(SELECT user_id FROM club_memberships WHERE id=?)", " =SUM(1;2)\"",ana);
+        var csv=mvc.perform(get("/api/v1/reports/attendance.csv").session(trainer).param("from","2026-10-01").param("to","2026-11-01").param("membershipId",String.valueOf(ana)))
+            .andExpect(status().isOk()).andReturn().getResponse();
+        byte[] bytes=csv.getContentAsByteArray();
+        assertThat(java.util.Arrays.copyOf(bytes,3)).containsExactly((byte)0xef,(byte)0xbb,(byte)0xbf);
+        String text=new String(bytes,java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(text).contains("\"' =SUM(1;2)\"\"\"").contains(";2;2;1;2;1;100,0;").contains("\r\n");
+        assertThat(csv.getHeader("Content-Disposition")).contains("attachment");
+        JsonNode excluded=body(trainer,get("/api/v1/reports/attendance").param("from","2026-10-01").param("to","2026-11-01").param("belt","BLACK"));
+        assertThat(excluded.get("items").isEmpty()).isTrue();
+        assertThat(excluded.get("totals").get("totalPresent").asInt()).isZero();
+        mvc.perform(get("/api/v1/reports/attendance").session(trainer).param("from","2026-10-01").param("to","2026-10-01"))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void clubReportIsRestrictedAndAbsenceHandlesNeverAttendedAndThresholds() throws Exception {
+        for(String path: List.of("/reports/attendance?from=2026-10-01&to=2026-11-01", "/reports/attendance.csv?from=2026-10-01&to=2026-11-01", "/reports/inactive-members")) {
+            mvc.perform(get("/api/v1"+path)).andExpect(status().isUnauthorized());
+            mvc.perform(get("/api/v1"+path).session(anaSession)).andExpect(status().isForbidden());
+        }
+        long never=users.active("never@klub.hr","MEMBER").membershipId();
+        jdbc.update("UPDATE club_memberships SET joined_on=DATE '2026-10-02' WHERE id=?",never);
+        JsonNode fourteen=body(trainer,get("/api/v1/reports/inactive-members").param("days","14"));
+        assertThat(fourteen.get("items").toString()).contains("\"membershipId\":"+never);
+        JsonNode thirty=body(trainer,get("/api/v1/reports/inactive-members").param("days","30"));
+        assertThat(thirty.get("items").toString()).doesNotContain("\"membershipId\":"+never);
+        jdbc.update("UPDATE club_memberships SET status='INACTIVE' WHERE id=?",never);
+        assertThat(body(trainer,get("/api/v1/reports/inactive-members").param("days","14")).get("items").toString()).doesNotContain("\"membershipId\":"+never);
+        mvc.perform(get("/api/v1/reports/inactive-members").session(trainer).param("days","0")).andExpect(status().isBadRequest());
+    }
+
+    @Test
     void ownStatisticsFollowTheCountingRules() throws Exception {
         JsonNode stats = body(anaSession, get("/api/v1/me/statistics"));
 

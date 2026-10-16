@@ -742,7 +742,10 @@ export interface paths {
         };
         /**
          * Statistika dolazaka po članovima
-         * @description Broje se treninzi (ne sati), samo `PRESENT` na `HELD` terminima, po lokalnom datumu treninga.
+         * @description Broje se treninzi (ne sati), samo PRESENT na HELD terminima, po lokalnom datumu treninga.
+         *     Brojači mjeseca i 7/30 dana presjek su odabranog razdoblja s prozorima koji završavaju danas.
+         *     lastPresentOn dolazi iz cijele povijesti. Prosjek je filtrirani broj dolazaka / svi HELD termini
+         *     u razdoblju, uključujući prazne termine. Nulti nazivnik daje null; UNMARKED nije evidentirana prijava.
          */
         get: operations["getAttendanceReport"];
         put?: never;
@@ -764,7 +767,8 @@ export interface paths {
          * CSV izvoz izvještaja o dolascima
          * @description Isti filteri kao `/reports/attendance`, bez paginacije (svi redovi). Format za Excel (hr):
          *     UTF-8 s BOM-om, separator `;`, decimalni zarez, datumi `dd.MM.yyyy.`, CRLF.
-         *     Stupci: `Prezime;Ime;E-mail;Pojas;Dolasci ukupno;Dolasci u mjesecu;Zadnjih 7 dana;Zadnjih 30 dana;Prijave bez dolaska;Postotak nedolazaka;Zadnji dolazak`.
+         *     Stupci: `Prezime;Ime;E-mail;Pojas;Dolasci ukupno;Dolasci u mjesecu;Zadnjih 7 dana;Zadnjih 30 dana;Prijave bez dolaska;Postotak nedolazaka;Zadnji dolazak;Evidentirane prijave;Nepotvrđene prijave`.
+         *     Tekst je citiran, dvostruki navodnici su udvostručeni, a tekst koji nakon razmaka/kontrolnih znakova počinje s =,+,-,@ dobiva apostrof.
          */
         get: operations["exportAttendanceReportCsv"];
         put?: never;
@@ -782,7 +786,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Aktivni članovi koji dugo nisu dolazili */
+        /**
+         * Aktivni članovi koji dugo nisu dolazili
+         * @description Neovisan pregled cijele povijesti do danas u Europe/Zagreb. Prag je uključiv (razlika kalendarskih
+         *     datuma >= days). Član bez dolazaka ulazi kada je prošlo days dana od joinedOn;
+         *     lastPresentOn i daysSinceLastPresent ostaju null. Neaktivna članstva nisu u ovom popisu.
+         */
         get: operations["listInactiveMembers"];
         put?: never;
         post?: never;
@@ -1571,6 +1580,9 @@ export interface components {
         MemberAttendanceRow: {
             membershipId: components["schemas"]["MembershipId"];
             userId: components["schemas"]["UserId"];
+            email: string;
+            decidedRegistrations: number;
+            unmarkedRegistrations: number;
             firstName: string;
             lastName: string;
             currentBelt: components["schemas"]["CurrentBelt"];
@@ -1596,6 +1608,12 @@ export interface components {
                 heldSessions: number;
                 totalPresent: number;
                 averagePresentPerSession: number | null;
+                sessions: {
+                    trainingId: components["schemas"]["TrainingId"];
+                    /** Format: date */
+                    localDate: string;
+                    totalPresent: number;
+                }[];
                 monthly: {
                     /** @example 2026-10 */
                     month: string;
@@ -1905,7 +1923,7 @@ export interface components {
         ReportTo: string;
         /** @description Filter na jednog polaznika. */
         ReportMembershipId: components["schemas"]["MembershipId"];
-        /** @description Filter po trenutačnom pojasu. */
+        /** @description D-05 – filter po trenutačnom pojasu člana; ne ograničava dolaske na povijesno razdoblje tog pojasa. */
         ReportBelt: components["schemas"]["CurrentBelt"];
     };
     requestBodies: never;
@@ -3077,7 +3095,7 @@ export interface operations {
                 to: components["parameters"]["ReportTo"];
                 /** @description Filter na jednog polaznika. */
                 membershipId?: components["parameters"]["ReportMembershipId"];
-                /** @description Filter po trenutačnom pojasu. */
+                /** @description D-05 – filter po trenutačnom pojasu člana; ne ograničava dolaske na povijesno razdoblje tog pojasa. */
                 belt?: components["parameters"]["ReportBelt"];
                 /** @description Broj stranice od 0. */
                 page?: components["parameters"]["Page"];
@@ -3114,8 +3132,9 @@ export interface operations {
                 to: components["parameters"]["ReportTo"];
                 /** @description Filter na jednog polaznika. */
                 membershipId?: components["parameters"]["ReportMembershipId"];
-                /** @description Filter po trenutačnom pojasu. */
+                /** @description D-05 – filter po trenutačnom pojasu člana; ne ograničava dolaske na povijesno razdoblje tog pojasa. */
                 belt?: components["parameters"]["ReportBelt"];
+                sort?: string;
             };
             header?: never;
             path?: never;

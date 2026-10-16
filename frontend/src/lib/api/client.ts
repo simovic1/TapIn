@@ -33,10 +33,10 @@ function readCookie(name: string): string | undefined {
     ?.slice(name.length + 1);
 }
 
-export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function apiFetch<T>(path: string, init: RequestInit = {}, format: 'json' | 'blob' = 'json'): Promise<T> {
   const method = (init.method ?? 'GET').toUpperCase();
   const headers = new Headers(init.headers);
-  headers.set('Accept', 'application/json, application/problem+json');
+  headers.set('Accept', format === 'blob' ? 'text/csv, application/problem+json' : 'application/json, application/problem+json');
   if (init.body !== undefined && !(init.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
@@ -61,5 +61,6 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   }
   if (response.status === 204) return undefined as T;
   if (response.status === 202 && !response.headers.get('Content-Type')?.includes('json')) return undefined as T;
+  if (format === 'blob') return (await response.blob()) as T;
   return (await response.json()) as T;
 }
