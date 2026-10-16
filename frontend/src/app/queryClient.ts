@@ -20,6 +20,10 @@ export function createQueryClient() {
       onError: (error, _variables, _context, mutation) => {
         if (!mutation.meta?.ignoreUnauthorized) handleUnauthorized(client, error);
       },
+      // Registrations, attendance and belts all feed the statistics: recomputed by the server, never patched here.
+      onSuccess: () => {
+        void client.invalidateQueries({ queryKey: ['statistics'] });
+      },
     }),
     defaultOptions: {
       queries: {

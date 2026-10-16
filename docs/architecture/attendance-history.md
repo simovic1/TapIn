@@ -6,7 +6,7 @@ Prozivka unaprijed upozorava da svaka stvarna izmjena šalje obavijest. U povije
 
 Napomena (do 500 znakova) šalje se uz upis i poništavanje. Backend novi završeni unos označava HISTORICAL_IMPORT, promjenu postojećeg statusa i povratak na UNMARKED kao CORRECTION. Masovno označavanje zadržava BULK i također provjerava aktivnost na datum starog treninga. Audit i outbox nastaju u istoj transakciji; identičan status ne šalje novu obavijest. expectedVersion i sačuvani UNMARKED redak štite naknadne ispravke.
 
-Evidencija je vezana uz session_id i datum training_sessions.start_at u Europe/Zagreb. occurred_at u auditu označava vrijeme izmjene, a ne statističko razdoblje. Modul statistike još nije implementiran: njegovi budući izračuni moraju koristiti datum treninga, ne datum audita.
+Evidencija je vezana uz session_id i datum training_sessions.start_at u Europe/Zagreb. occurred_at u auditu označava vrijeme izmjene, a ne statističko razdoblje. Statistika (BJJ-31, `statistics.md`) zato koristi datum treninga, ne datum audita.
 
 **Prikaži povijest** otvara audit od najnovije promjene, s filtrom člana, stranicama od 20 zapisa i ručnim osvježavanjem. Prikazuje prije/poslije, sve izvore, napomenu, lokalno vrijeme i autora. Imena su trenutačna prikazna imena; actorUserId je trajni identitet autora. UI nema uređivanje/brisanje audit redaka. Endpoint i prozivka dostupni su isključivo TRAINER/ADMIN; audit tablica ostaje zaštićena od UPDATE/DELETE.
 

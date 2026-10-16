@@ -792,6 +792,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/outbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stanje reda e-mail poruka, upozorenje i poruke s pokušajima
+         * @description Za operatera (BJJ-30). Brojači po stanju, starost najstarije poruke na čekanju, upozorenje na dugotrajne
+         *     greške i popis poruka (zadano: prvo `FAILED`, zatim `PENDING`). **Nikad** ne vraća sadržaj poruke (pozivnice
+         *     i reset lozinke sadrže tajne poveznice); `lastError` je očišćen od lozinki, tokena i poveznica.
+         *
+         *     `SENT` znači **prihvaćeno od providera** (polje `acceptedByProviderAt`) – potvrdu dostave u sandučić nemamo.
+         */
+        get: operations["getOutboxOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/outbox/{outboxId}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sigurno ponovno slanje neuspjele poruke
+         * @description Vraća `FAILED` poruku u `PENDING` s novim brojem pokušaja; isti deduplikacijski ključ i Message-ID, pa ne
+         *     nastaje nova poruka. Odbija se (`422`) poruka koja nije `FAILED` (i drugi klik na isti gumb), poruka s tajnom
+         *     poveznicom (ponovite poslovnu radnju, npr. ponovno pošaljite pozivnicu) i istekla poruka (podsjetnik nakon
+         *     početka treninga).
+         */
+        post: operations["retryOutboxMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1434,19 +1481,70 @@ export interface components {
             effectiveToDate: string | null;
             trainingsCount: number;
         };
+        /**
+         * @description Odluka D-05: razdoblja su lokalni kalendarski datumi treninga (Europe/Zagreb), uključujući današnji dan.
+         *     Sva razdoblja završavaju s `today`.
+         */
+        StatisticsWindows: {
+            /** Format: date */
+            today: string;
+            /**
+             * Format: date
+             * @description Prvi dan tekućeg mjeseca.
+             */
+            thisMonthFrom: string;
+            /**
+             * Format: date
+             * @description `today` − 6 dana.
+             */
+            last7DaysFrom: string;
+            /**
+             * Format: date
+             * @description `today` − 29 dana.
+             */
+            last30DaysFrom: string;
+        };
+        /**
+         * @description Aktivne (neotkazane) prijave na održane termine prema ishodu evidencije. `unmarked` – trener još nije
+         *     odlučio; to nije ni trening ni potvrđena odsutnost.
+         */
+        RegistrationOutcomes: {
+            total: number;
+            present: number;
+            absent: number;
+            unmarked: number;
+        };
+        /**
+         * @description Računa se pri svakom čitanju (ispravci se odmah vide). Trening = `PRESENT` na `HELD` terminu, najviše
+         *     jednom po članu i terminu; otkazani i još neodržani termini se ne broje (§9.1, §9.3, odluka D-05).
+         */
         MemberStatistics: {
             membershipId: components["schemas"]["MembershipId"];
             userId: components["schemas"]["UserId"];
             /** Format: date-time */
             asOf: string;
+            windows: components["schemas"]["StatisticsWindows"];
+            /**
+             * Format: date
+             * @description Datum učlanjenja (`joined_on`).
+             */
+            memberSince: string;
             totalPresent: number;
-            /** @description Tekući kalendarski mjesec u Europe/Zagreb. */
+            /** @description Od `windows.thisMonthFrom` do danas. */
             presentThisMonth: number;
+            /** @description Od `windows.last7DaysFrom` do danas. */
             presentLast7Days: number;
+            /** @description Od `windows.last30DaysFrom` do danas. */
             presentLast30Days: number;
-            /** @description `REGISTERED` + `ABSENT`. */
+            /** @description `REGISTERED` + `ABSENT` na održanim terminima; `UNMARKED` se ne broji. */
             registeredButAbsent: number;
+            registrations: components["schemas"]["RegistrationOutcomes"];
+            /**
+             * @description `HELD_SESSIONS_WHILE_ACTIVE`: nazivnik = održani termini s lokalnim datumom od `memberSince`, na čijem je
+             *     početku članstvo bilo aktivno; brojnik = `PRESENT` na tim terminima.
+             */
             attendanceRate: components["schemas"]["AttendanceRate"];
+            /** @description `REGISTRATIONS`: `registrations.present / (present + absent)`; `UNMARKED` prijave nisu u nazivniku. */
             registrationAttendanceRate: components["schemas"]["AttendanceRate"];
             currentBelt: components["schemas"]["CurrentBelt"];
             /** Format: date */
@@ -1523,6 +1621,81 @@ export interface components {
         InactiveMemberPage: {
             items: components["schemas"]["InactiveMember"][];
             page: components["schemas"]["PageMetadata"];
+        };
+        /**
+         * @description `PENDING` – u redu za slanje ili čeka ponovni pokušaj; `SENT` – **prihvaćeno od providera** (ne potvrda
+         *     dostave); `FAILED` – trajna greška, iscrpljeni pokušaji, istekla ili povučena poruka.
+         * @enum {string}
+         */
+        OutboxStatus: "PENDING" | "SENT" | "FAILED";
+        /** @enum {string} */
+        OutboxEventType: "INVITATION" | "REGISTRATION_CONFIRMED" | "REGISTRATION_CANCELLED" | "TRAINING_REMINDER" | "TRAINING_CANCELLED" | "TRAINING_RESCHEDULED" | "ATTENDANCE_RECORDED" | "PASSWORD_RESET";
+        OutboxItem: {
+            /** Format: int64 */
+            outboxId: number;
+            eventType: components["schemas"]["OutboxEventType"];
+            status: components["schemas"]["OutboxStatus"];
+            recipientUserId: components["schemas"]["UserId"];
+            /** Format: email */
+            recipientEmail: string;
+            /** Format: int64 */
+            trainingId: number | null;
+            /** @description Ključ poslovnog događaja, npr. `ATTENDANCE_RECORDED:audit-981`. */
+            deduplicationKey: string;
+            attemptCount: number;
+            maxAttempts: number;
+            /**
+             * Format: date-time
+             * @description Trenutak stavljanja u red.
+             */
+            createdAt: string;
+            /** Format: date-time */
+            lastAttemptAt: string | null;
+            /**
+             * Format: date-time
+             * @description Samo za `PENDING`.
+             */
+            nextAttemptAt: string | null;
+            /** @description Očišćen od lozinki, tokena i poveznica. */
+            lastError: string | null;
+            /**
+             * Format: date-time
+             * @description Provider je prihvatio poruku; nije potvrda dostave.
+             */
+            acceptedByProviderAt: string | null;
+            providerMessageId: string | null;
+            /** Format: date-time */
+            expiresAt: string | null;
+            /** @description `FAILED`, sadržaj sačuvan i nije istekla – smije se ponovno poslati. */
+            retryable: boolean;
+        };
+        OutboxOverview: {
+            /** Format: date-time */
+            checkedAt: string;
+            counts: {
+                PENDING: number;
+                SENT: number;
+                FAILED: number;
+            };
+            oldestPendingAgeSeconds: number | null;
+            failedLast24Hours: number;
+            alert: {
+                /** @description Neka `PENDING` poruka starija je od `alertAfterMinutes` (dugotrajna greška providera ili worker ne radi). */
+                degraded: boolean;
+                /** Format: date-time */
+                degradedSince: string | null;
+                stuckPending: number;
+                alertAfterMinutes: number;
+                latestError: string | null;
+            };
+            items: components["schemas"]["OutboxItem"][];
+            page: components["schemas"]["PageMetadata"];
+        };
+        OutboxRetryResult: {
+            /** Format: int64 */
+            outboxId: number;
+            /** @enum {string} */
+            status: "PENDING";
         };
     };
     responses: {
@@ -2996,6 +3169,60 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    getOutboxOverview: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["OutboxStatus"];
+                /** @description Broj stranice od 0. */
+                page?: components["parameters"]["Page"];
+                size?: components["parameters"]["Size"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboxOverview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    retryOutboxMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                outboxId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Poruka je ponovno u redu za slanje (nije poslana ni dostavljena) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboxRetryResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableContent"];
         };
     };
 }

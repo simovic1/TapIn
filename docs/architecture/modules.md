@@ -14,7 +14,7 @@ moduli. Svaki modul je Java paket `com.tapin.<modul>` i ima parnjak u `frontend/
 | `registrations` | Prijava/otkazivanje prijave člana | `training_registrations`, `registration_events` | `/trainings/{id}/my-registration` | `features/trainings` | 2 |
 | `attendance` | **Poslovna jezgra**: PRESENT/ABSENT, masovno označavanje, optimistično zaključavanje, audit | `training_attendances`, `attendance_audit_logs` | `/trainings/{id}/roster`, `/trainings/{id}/attendance/**` | `features/attendance` | 3 |
 | `belts` | Povijest pojaseva, promocije, ispravci uz audit | `member_belt_periods`, `belt_period_audit_logs` | `/members/{id}/belts/**`, `/me/belts` | `features/belts` | 4 |
-| `notifications` | Transactional outbox, worker, retry/backoff, deduplikacija, podsjetnici, HR predlošci | `email_outbox` | — (interno) | — | 5 |
+| `notifications` | Transactional outbox, worker, retry/backoff, deduplikacija, podsjetnici, HR predlošci | `email_outbox` | `/admin/outbox/**` (ADMIN, operativni nadzor) | — | 5 |
 | `reporting` | Statistika, izvještaji, CSV izvoz — **samo čitanje** | — (samo pogledi `R__reporting_*`) | `/reports/**`, `/me/statistics`, `/members/{id}/statistics` | `features/statistics` | 6 |
 
 Trenutačni vlasnik svih modula je `@simovic1` (`.github/CODEOWNERS`). Kad tim naraste, vlasnik se mijenja po modulu

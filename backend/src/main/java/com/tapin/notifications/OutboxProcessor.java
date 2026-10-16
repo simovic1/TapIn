@@ -3,6 +3,9 @@ package com.tapin.notifications;
 import com.tapin.notifications.email.EmailMessage;
 import com.tapin.notifications.email.EmailSender;
 import com.tapin.notifications.email.SendResult;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,7 +14,9 @@ import org.springframework.stereotype.Component;
 import java.net.InetAddress;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -38,15 +43,21 @@ class OutboxProcessor {
     private final RetryPolicy retryPolicy;
     private final Clock clock;
     private final String workerId;
+    private final Map<Outcome, Counter> outcomes = new EnumMap<>(Outcome.class);
 
     @Autowired
     OutboxProcessor(OutboxRepository repository, EmailSender sender, EmailTemplateRenderer renderer,
-                    OutboxProperties properties, Clock clock) {
-        this(repository, sender, renderer, properties, clock, defaultWorkerId());
+                    OutboxProperties properties, Clock clock, MeterRegistry meters) {
+        this(repository, sender, renderer, properties, clock, defaultWorkerId(), meters);
     }
 
     OutboxProcessor(OutboxRepository repository, EmailSender sender, EmailTemplateRenderer renderer,
                     OutboxProperties properties, Clock clock, String workerId) {
+        this(repository, sender, renderer, properties, clock, workerId, new SimpleMeterRegistry());
+    }
+
+    private OutboxProcessor(OutboxRepository repository, EmailSender sender, EmailTemplateRenderer renderer,
+                            OutboxProperties properties, Clock clock, String workerId, MeterRegistry meters) {
         this.repository = repository;
         this.sender = sender;
         this.renderer = renderer;
@@ -54,6 +65,12 @@ class OutboxProcessor {
         this.retryPolicy = new RetryPolicy(properties, () -> ThreadLocalRandom.current().nextDouble());
         this.clock = clock;
         this.workerId = workerId;
+        for (Outcome outcome : Outcome.values()) {
+            outcomes.put(outcome, Counter.builder("tapin.outbox.deliveries")
+                    .description("Delivery attempts by outcome (SENT = accepted by the provider, not delivered)")
+                    .tag("outcome", outcome.name())
+                    .register(meters));
+        }
     }
 
     BatchResult processDue() {
@@ -67,7 +84,9 @@ class OutboxProcessor {
         int retried = 0;
         int failed = 0;
         for (OutboxEntry entry : claimed) {
-            switch (deliver(entry, now)) {
+            Outcome outcome = deliver(entry, now);
+            outcomes.get(outcome).increment();
+            switch (outcome) {
                 case SENT -> sent++;
                 case RETRY -> retried++;
                 case FAILED -> failed++;

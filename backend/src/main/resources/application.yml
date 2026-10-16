@@ -84,6 +84,11 @@ tapin:
     max-attempts: 8
     initial-backoff: 1m
     max-backoff: 1h
+    alert:
+      # OUTBOX_DEGRADED (ERROR log, gauge tapin.outbox.degraded=1) while a PENDING e-mail is older than this.
+      after: 30m
+      interval: 1m
+      repeat: 1h
   bootstrap:
     admin:
       # First administrator, created only while no active administrator exists. No default password anywhere
@@ -97,7 +102,8 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # metrics: ADMIN only (ApiAuthorizationRules), e.g. /actuator/metrics/tapin.outbox.messages
+        include: health,info,metrics
   endpoint:
     health:
       probes:

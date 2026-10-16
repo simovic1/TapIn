@@ -25,7 +25,6 @@ class OutboxRepository {
 
     private static final TypeReference<Map<String, Object>> PAYLOAD_TYPE = new TypeReference<>() {
     };
-    static final int MAX_ERROR_LENGTH = 2000;
 
     private final NamedParameterJdbcTemplate jdbc;
     private final JsonMapper jsonMapper;
@@ -105,7 +104,7 @@ class OutboxRepository {
                 WHERE id = :id AND locked_by = :workerId AND status = 'PENDING'
                 """, params(id, workerId, now)
                 .addValue("nextAttemptAt", ts(nextAttemptAt))
-                .addValue("error", truncate(error))) == 1;
+                .addValue("error", OutboxErrors.sanitize(error))) == 1;
     }
 
     boolean markFailed(long id, String workerId, Instant now, String error) {
@@ -114,15 +113,19 @@ class OutboxRepository {
                 SET status = 'FAILED', last_error = :error, locked_by = NULL, locked_until = NULL, updated_at = :now,
                     payload = CASE WHEN redact_payload_after_send THEN '{}'::jsonb ELSE payload END
                 WHERE id = :id AND locked_by = :workerId AND status = 'PENDING'
-                """, params(id, workerId, now).addValue("error", truncate(error))) == 1;
+                """, params(id, workerId, now).addValue("error", OutboxErrors.sanitize(error))) == 1;
     }
 
-    /** Manual re-delivery of a FAILED row with a fresh attempt budget. Redacted rows cannot be re-sent. */
+    /**
+     * Manual re-delivery of a FAILED row with a fresh attempt budget. Redacted rows (secret links) and rows past their
+     * {@code expires_at} (a reminder after the training started) cannot be re-sent.
+     */
     boolean requeueFailed(long id, Instant now) {
         return jdbc.update("""
                 UPDATE email_outbox
                 SET status = 'PENDING', attempt_count = 0, next_attempt_at = :now, updated_at = :now
                 WHERE id = :id AND status = 'FAILED' AND NOT redact_payload_after_send
+                  AND (expires_at IS NULL OR expires_at > :now)
                 """, new MapSqlParameterSource().addValue("id", id).addValue("now", ts(now))) == 1;
     }
 
@@ -186,13 +189,71 @@ class OutboxRepository {
                 WHERE session_id = :session AND event_type = :type AND status = 'PENDING'
                   AND (locked_until IS NULL OR locked_until < :now)
                 """, new MapSqlParameterSource("session", sessionId).addValue("type", type.name())
-                .addValue("reason", truncate(reason)).addValue("now", ts(now)));
+                .addValue("reason", OutboxErrors.sanitize(reason)).addValue("now", ts(now)));
     }
 
-    static String truncate(String error) {
-        if (error == null) {
-            return null;
-        }
-        return error.length() <= MAX_ERROR_LENGTH ? error : error.substring(0, MAX_ERROR_LENGTH - 1) + "…";
+    // ------------------------------------------------------------------ operator view (BJJ-30)
+
+    /** A row as an operator may see it: no payload (it can hold invitation/reset links), sanitized error. */
+    record OperatorRow(long id, EmailEventType eventType, OutboxStatus status, long recipientUserId,
+                       String recipientEmail, Long sessionId, String deduplicationKey, int attemptCount,
+                       Instant createdAt, Instant lastAttemptAt, Instant nextAttemptAt, String lastError,
+                       Instant sentAt, String providerMessageId, Instant expiresAt, boolean retryable) {
+    }
+
+    List<OperatorRow> findForOperator(Optional<OutboxStatus> status, int page, int size, Instant now) {
+        return jdbc.query("""
+                SELECT id, event_type, status, recipient_user_id, recipient_email, session_id, deduplication_key,
+                       attempt_count, created_at, last_attempt_at, next_attempt_at, last_error, sent_at,
+                       provider_message_id, expires_at,
+                       (status = 'FAILED' AND NOT redact_payload_after_send
+                        AND (expires_at IS NULL OR expires_at > :now)) AS retryable
+                FROM email_outbox
+                WHERE (CAST(:status AS VARCHAR) IS NULL OR status = :status)
+                ORDER BY CASE status WHEN 'FAILED' THEN 0 WHEN 'PENDING' THEN 1 ELSE 2 END, updated_at DESC, id DESC
+                LIMIT :size OFFSET :offset
+                """, new MapSqlParameterSource("status", status.map(Enum::name).orElse(null))
+                .addValue("size", size).addValue("offset", (long) page * size).addValue("now", ts(now)), (rs, n) -> {
+            OutboxStatus rowStatus = OutboxStatus.valueOf(rs.getString("status"));
+            return new OperatorRow(rs.getLong("id"), EmailEventType.valueOf(rs.getString("event_type")), rowStatus,
+                    rs.getLong("recipient_user_id"), rs.getString("recipient_email"),
+                    rs.getObject("session_id", Long.class), rs.getString("deduplication_key"),
+                    rs.getInt("attempt_count"), instant(rs, "created_at"), instant(rs, "last_attempt_at"),
+                    rowStatus == OutboxStatus.PENDING ? instant(rs, "next_attempt_at") : null,
+                    OutboxErrors.sanitize(rs.getString("last_error")), instant(rs, "sent_at"),
+                    rs.getString("provider_message_id"), instant(rs, "expires_at"),
+                    rs.getBoolean("retryable"));
+        });
+    }
+
+    long countForOperator(Optional<OutboxStatus> status) {
+        Long count = jdbc.queryForObject("""
+                SELECT count(*) FROM email_outbox WHERE (CAST(:status AS VARCHAR) IS NULL OR status = :status)
+                """, new MapSqlParameterSource("status", status.map(Enum::name).orElse(null)), Long.class);
+        return count == null ? 0 : count;
+    }
+
+    /** Queue state for the alert: PENDING rows older than {@code stuckBefore} and the newest error among them. */
+    record Backlog(long stuckPending, Instant oldestStuckCreatedAt, String latestError) {
+    }
+
+    Backlog backlog(Instant stuckBefore) {
+        return jdbc.queryForObject("""
+                SELECT count(*) AS n, min(created_at) AS oldest,
+                       (SELECT last_error FROM email_outbox
+                        WHERE status = 'PENDING' AND created_at < :before AND last_error IS NOT NULL
+                        ORDER BY last_attempt_at DESC NULLS LAST, id DESC LIMIT 1) AS latest_error
+                FROM email_outbox
+                WHERE status = 'PENDING' AND created_at < :before
+                """, new MapSqlParameterSource("before", ts(stuckBefore)),
+                (rs, n) -> new Backlog(rs.getLong("n"), instant(rs, "oldest"),
+                        OutboxErrors.sanitize(rs.getString("latest_error"))));
+    }
+
+    /** FAILED rows that changed at or after {@code since} (exhausted retries, permanent errors, stale messages). */
+    long failedSince(Instant since) {
+        Long count = jdbc.queryForObject("SELECT count(*) FROM email_outbox WHERE status = 'FAILED' AND updated_at >= :since",
+                new MapSqlParameterSource("since", ts(since)), Long.class);
+        return count == null ? 0 : count;
     }
 }

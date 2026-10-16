@@ -87,6 +87,8 @@ tags:
     description: Statistika članova (§9, §11.2)
   - name: Reports
     description: Izvještaji i CSV izvoz (§11.5)
+  - name: Operations
+    description: Operativni nadzor slanja e-maila – samo ADMIN, bez zasebnog ekrana (§8.3, §13.1, BJJ-30)
 
 paths:
   # ------------------------------------------------------------------ System
@@ -1257,6 +1259,65 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  # ------------------------------------------------------------------ Operations
+  /admin/outbox:
+    get:
+      tags: [Operations]
+      operationId: getOutboxOverview
+      summary: Stanje reda e-mail poruka, upozorenje i poruke s pokušajima
+      description: |
+        Za operatera (BJJ-30). Brojači po stanju, starost najstarije poruke na čekanju, upozorenje na dugotrajne
+        greške i popis poruka (zadano: prvo `FAILED`, zatim `PENDING`). **Nikad** ne vraća sadržaj poruke (pozivnice
+        i reset lozinke sadrže tajne poveznice); `lastError` je očišćen od lozinki, tokena i poveznica.
+
+        `SENT` znači **prihvaćeno od providera** (polje `acceptedByProviderAt`) – potvrdu dostave u sandučić nemamo.
+      x-spec-addition: true
+      x-roles: [ADMIN]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/OutboxStatus' }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OutboxOverview' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/outbox/{outboxId}/retry:
+    post:
+      tags: [Operations]
+      operationId: retryOutboxMessage
+      summary: Sigurno ponovno slanje neuspjele poruke
+      description: |
+        Vraća `FAILED` poruku u `PENDING` s novim brojem pokušaja; isti deduplikacijski ključ i Message-ID, pa ne
+        nastaje nova poruka. Odbija se (`422`) poruka koja nije `FAILED` (i drugi klik na isti gumb), poruka s tajnom
+        poveznicom (ponovite poslovnu radnju, npr. ponovno pošaljite pozivnicu) i istekla poruka (podsjetnik nakon
+        početka treninga).
+      x-spec-addition: true
+      x-roles: [ADMIN]
+      parameters:
+        - name: outboxId
+          in: path
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+      responses:
+        '200':
+          description: Poruka je ponovno u redu za slanje (nije poslana ni dostavljena)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OutboxRetryResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+
 components:
   securitySchemes:
     sessionCookie:
@@ -2341,20 +2402,56 @@ components:
         effectiveFromDate: { type: string, format: date }
         effectiveToDate: { type: [string, 'null'], format: date }
         trainingsCount: { type: integer, minimum: 0 }
+    StatisticsWindows:
+      type: object
+      description: |
+        Odluka D-05: razdoblja su lokalni kalendarski datumi treninga (Europe/Zagreb), uključujući današnji dan.
+        Sva razdoblja završavaju s `today`.
+      required: [today, thisMonthFrom, last7DaysFrom, last30DaysFrom]
+      properties:
+        today: { type: string, format: date }
+        thisMonthFrom: { type: string, format: date, description: Prvi dan tekućeg mjeseca. }
+        last7DaysFrom: { type: string, format: date, description: '`today` − 6 dana.' }
+        last30DaysFrom: { type: string, format: date, description: '`today` − 29 dana.' }
+    RegistrationOutcomes:
+      type: object
+      description: |
+        Aktivne (neotkazane) prijave na održane termine prema ishodu evidencije. `unmarked` – trener još nije
+        odlučio; to nije ni trening ni potvrđena odsutnost.
+      required: [total, present, absent, unmarked]
+      properties:
+        total: { type: integer, minimum: 0 }
+        present: { type: integer, minimum: 0 }
+        absent: { type: integer, minimum: 0 }
+        unmarked: { type: integer, minimum: 0 }
     MemberStatistics:
       type: object
-      required: [membershipId, userId, asOf, totalPresent, presentThisMonth, presentLast7Days, presentLast30Days, registeredButAbsent, attendanceRate, registrationAttendanceRate, currentBelt, currentBeltAwardedOn, currentBeltTrainings, unassignedTrainings, beltPeriods]
+      description: |
+        Računa se pri svakom čitanju (ispravci se odmah vide). Trening = `PRESENT` na `HELD` terminu, najviše
+        jednom po članu i terminu; otkazani i još neodržani termini se ne broje (§9.1, §9.3, odluka D-05).
+      required: [membershipId, userId, asOf, windows, memberSince, totalPresent, presentThisMonth, presentLast7Days, presentLast30Days, registeredButAbsent, registrations, attendanceRate, registrationAttendanceRate, currentBelt, currentBeltAwardedOn, currentBeltTrainings, unassignedTrainings, beltPeriods]
       properties:
         membershipId: { $ref: '#/components/schemas/MembershipId' }
         userId: { $ref: '#/components/schemas/UserId' }
         asOf: { type: string, format: date-time }
+        windows: { $ref: '#/components/schemas/StatisticsWindows' }
+        memberSince: { type: string, format: date, description: Datum učlanjenja (`joined_on`). }
         totalPresent: { type: integer, minimum: 0 }
-        presentThisMonth: { type: integer, minimum: 0, description: Tekući kalendarski mjesec u Europe/Zagreb. }
-        presentLast7Days: { type: integer, minimum: 0 }
-        presentLast30Days: { type: integer, minimum: 0 }
-        registeredButAbsent: { type: integer, minimum: 0, description: '`REGISTERED` + `ABSENT`.' }
-        attendanceRate: { $ref: '#/components/schemas/AttendanceRate' }
-        registrationAttendanceRate: { $ref: '#/components/schemas/AttendanceRate' }
+        presentThisMonth: { type: integer, minimum: 0, description: 'Od `windows.thisMonthFrom` do danas.' }
+        presentLast7Days: { type: integer, minimum: 0, description: 'Od `windows.last7DaysFrom` do danas.' }
+        presentLast30Days: { type: integer, minimum: 0, description: 'Od `windows.last30DaysFrom` do danas.' }
+        registeredButAbsent: { type: integer, minimum: 0, description: '`REGISTERED` + `ABSENT` na održanim terminima; `UNMARKED` se ne broji.' }
+        registrations: { $ref: '#/components/schemas/RegistrationOutcomes' }
+        attendanceRate:
+          allOf:
+            - $ref: '#/components/schemas/AttendanceRate'
+          description: |
+            `HELD_SESSIONS_WHILE_ACTIVE`: nazivnik = održani termini s lokalnim datumom od `memberSince`, na čijem je
+            početku članstvo bilo aktivno; brojnik = `PRESENT` na tim terminima.
+        registrationAttendanceRate:
+          allOf:
+            - $ref: '#/components/schemas/AttendanceRate'
+          description: '`REGISTRATIONS`: `registrations.present / (present + absent)`; `UNMARKED` prijave nisu u nazivniku.'
         currentBelt: { $ref: '#/components/schemas/CurrentBelt' }
         currentBeltAwardedOn: { type: [string, 'null'], format: date }
         currentBeltTrainings: { type: integer, minimum: 0 }
@@ -2456,3 +2553,68 @@ components:
           type: array
           items: { $ref: '#/components/schemas/InactiveMember' }
         page: { $ref: '#/components/schemas/PageMetadata' }
+
+    # ---------------------------------------------------------------- operations (e-mail queue)
+    OutboxStatus:
+      type: string
+      enum: [PENDING, SENT, FAILED]
+      description: |
+        `PENDING` – u redu za slanje ili čeka ponovni pokušaj; `SENT` – **prihvaćeno od providera** (ne potvrda
+        dostave); `FAILED` – trajna greška, iscrpljeni pokušaji, istekla ili povučena poruka.
+    OutboxEventType:
+      type: string
+      enum: [INVITATION, REGISTRATION_CONFIRMED, REGISTRATION_CANCELLED, TRAINING_REMINDER, TRAINING_CANCELLED, TRAINING_RESCHEDULED, ATTENDANCE_RECORDED, PASSWORD_RESET]
+    OutboxItem:
+      type: object
+      required: [outboxId, eventType, status, recipientUserId, recipientEmail, trainingId, deduplicationKey, attemptCount, maxAttempts, createdAt, lastAttemptAt, nextAttemptAt, lastError, acceptedByProviderAt, providerMessageId, expiresAt, retryable]
+      properties:
+        outboxId: { type: integer, format: int64 }
+        eventType: { $ref: '#/components/schemas/OutboxEventType' }
+        status: { $ref: '#/components/schemas/OutboxStatus' }
+        recipientUserId: { $ref: '#/components/schemas/UserId' }
+        recipientEmail: { type: string, format: email }
+        trainingId: { type: [integer, 'null'], format: int64 }
+        deduplicationKey: { type: string, description: 'Ključ poslovnog događaja, npr. `ATTENDANCE_RECORDED:audit-981`.' }
+        attemptCount: { type: integer, minimum: 0 }
+        maxAttempts: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time, description: Trenutak stavljanja u red. }
+        lastAttemptAt: { type: [string, 'null'], format: date-time }
+        nextAttemptAt: { type: [string, 'null'], format: date-time, description: Samo za `PENDING`. }
+        lastError: { type: [string, 'null'], description: 'Očišćen od lozinki, tokena i poveznica.' }
+        acceptedByProviderAt: { type: [string, 'null'], format: date-time, description: 'Provider je prihvatio poruku; nije potvrda dostave.' }
+        providerMessageId: { type: [string, 'null'] }
+        expiresAt: { type: [string, 'null'], format: date-time }
+        retryable: { type: boolean, description: '`FAILED`, sadržaj sačuvan i nije istekla – smije se ponovno poslati.' }
+    OutboxOverview:
+      type: object
+      required: [checkedAt, counts, oldestPendingAgeSeconds, failedLast24Hours, alert, items, page]
+      properties:
+        checkedAt: { type: string, format: date-time }
+        counts:
+          type: object
+          required: [PENDING, SENT, FAILED]
+          properties:
+            PENDING: { type: integer, minimum: 0 }
+            SENT: { type: integer, minimum: 0 }
+            FAILED: { type: integer, minimum: 0 }
+        oldestPendingAgeSeconds: { type: [integer, 'null'], minimum: 0 }
+        failedLast24Hours: { type: integer, minimum: 0 }
+        alert:
+          type: object
+          required: [degraded, degradedSince, stuckPending, alertAfterMinutes, latestError]
+          properties:
+            degraded: { type: boolean, description: 'Neka `PENDING` poruka starija je od `alertAfterMinutes` (dugotrajna greška providera ili worker ne radi).' }
+            degradedSince: { type: [string, 'null'], format: date-time }
+            stuckPending: { type: integer, minimum: 0 }
+            alertAfterMinutes: { type: integer, minimum: 1 }
+            latestError: { type: [string, 'null'] }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/OutboxItem' }
+        page: { $ref: '#/components/schemas/PageMetadata' }
+    OutboxRetryResult:
+      type: object
+      required: [outboxId, status]
+      properties:
+        outboxId: { type: integer, format: int64 }
+        status: { type: string, enum: [PENDING] }

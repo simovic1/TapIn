@@ -61,7 +61,7 @@ function RosterView({ trainingId, roster }: { trainingId: number; roster: Roster
           <Alert tone="error" title="Trening je otkazan">Dolasci se ne evidentiraju.</Alert>
         </div>
       )}
-      <Alert tone="warning">Svaka stvarna promjena dolaska, uključujući povijesni unos i poništavanje oznake, šalje članu e-mail obavijest. Kod unosa više članova nastaje zasebna obavijest za svakoga.</Alert>
+      <Alert tone="warning">Svaka stvarna promjena dolaska, uključujući povijesni unos i poništavanje oznake, stavlja članu e-mail obavijest u red za slanje. Kod unosa više članova nastaje zasebna obavijest za svakoga. Spremanje evidencije ne čeka slanje e-maila.</Alert>
       {historical && <p className="my-3">Povijesna evidencija pripada datumu treninga, ne današnjem datumu unosa. Za novi unos član mora biti aktivan na datum treninga.</p>}
       <Counters roster={roster} />
       <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">

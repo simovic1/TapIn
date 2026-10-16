@@ -36,6 +36,7 @@ final class ApiAuthorizationRules {
                         API + "/auth/password-reset/request",
                         API + "/auth/password-reset/confirm").permitAll()
                 .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                .requestMatchers("/actuator/metrics", "/actuator/metrics/**").hasRole(ADMIN)
                 .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/error").permitAll()
 
@@ -43,9 +44,10 @@ final class ApiAuthorizationRules {
                 .requestMatchers(HttpMethod.PUT, API + "/trainings/*/my-registration").hasRole(MEMBER)
                 .requestMatchers(HttpMethod.DELETE, API + "/trainings/*/my-registration").hasRole(MEMBER)
 
-                // ---- ADMIN only: accounts, roles, membership status
+                // ---- ADMIN only: accounts, roles, membership status, operations (e-mail queue)
                 .requestMatchers(HttpMethod.PATCH, API + "/members/*").hasRole(ADMIN)
                 .requestMatchers(HttpMethod.PUT, API + "/members/*/roles").hasRole(ADMIN)
+                .requestMatchers(API + "/admin/**").hasRole(ADMIN)
 
                 // ---- TRAINER or ADMIN: members, belts, other members' statistics
                 .requestMatchers(HttpMethod.GET, API + "/members").hasAnyRole(STAFF)

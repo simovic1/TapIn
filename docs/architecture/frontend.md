@@ -128,3 +128,14 @@ Prijava radi protiv pravog backenda (lokalno `admin@tapin.local` / `local-dev-ad
 `npm --prefix api run mock` + `npm run dev:mock`. Vite proxy u mock načinu postavlja `XSRF-TOKEN` i, nakon
 `POST /auth/login`, `TAPIN_SESSION` cookie, pa se cijeli tok prijave/odjave može isprobati. Uloge mock korisnika
 mijenjaju se zaglavljem `Prefer: example=member|admin` (zadano: trener + član).
+
+## Moja statistika (BJJ-32)
+
+- `/statistika` (`features/statistics`) prikazuje samo brojeve s poslužitelja (`/me/statistics`, `/me/attendance`,
+  BJJ-31) – stranica ništa ne prebrojava. Pravila brojanja i razdoblja: `statistics.md` (odluka D-05).
+- Prijave i odrađeni treninzi su odvojeni odjeljci; svako razdoblje ima ispisane datume (`windows`), a svaki postotak
+  brojnik, nazivnik i osnovu. Prazan nazivnik prikazuje se rečenicom, nikad kao 0 %.
+- `UNMARKED` je „Čeka evidenciju trenera” (isprekidani okvir), nikad „Niste došli”; otkazani trening je
+  „Trening otkazan – ne broji se”.
+- Osvježavanje: svaka uspješna mutacija u aplikaciji poništava upite `statistics` (`app/queryClient.ts`), upiti se
+  ponovno čitaju pri povratku na karticu (`refetchOnWindowFocus: always`), a gumb „Osvježi” čita odmah.

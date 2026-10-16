@@ -34,27 +34,13 @@ business transaction                         OutboxWorker (svakih 10 s, u istoj 
 | `next_attempt_at` | kad redak smije ponovno biti preuzet |
 | `last_attempt_at`, `last_error` | zadnji pokušaj i razlog greške (`[smtp, ambiguous] ...`) |
 | `locked_by`, `locked_until` | lease workera koji ga trenutno obrađuje |
-| `sent_at`, `provider_message_id` | potvrda providera |
+| `sent_at`, `provider_message_id` | provider je **prihvatio** poruku (nije potvrda dostave u sandučić) |
 
 Retry: eksponencijalni backoff 1 min → 2 → 4 → … do 1 h, ±10 % jitter, najviše 8 pokušaja (~3 h), zatim `FAILED`.
 Trajne greške (odbijena adresa, neispravna poruka, nedostaje podatak za predložak) idu odmah u `FAILED`.
 Postavke: `tapin.outbox.*` u `application.yml`.
 
-Korisni upiti:
-
-```sql
--- red i greške
-SELECT status, count(*) FROM email_outbox GROUP BY status;
-SELECT id, event_type, recipient_email, attempt_count, next_attempt_at, last_error
-FROM email_outbox WHERE status <> 'SENT' ORDER BY created_at;
-```
-
-Ponovno slanje `FAILED` poruke nakon otklanjanja uzroka: `NotificationOutbox.retryFailed(id)` (vraća u `PENDING`
-s novim brojem pokušaja). Poruke s tajnim sadržajem (pozivnica, reset lozinke) nakon `SENT`/`FAILED` imaju obrisan
-payload i ne mogu se ponovno poslati – poslovna radnja se ponavlja (npr. "Ponovno pošalji pozivnicu").
-
-Metrike (Micrometer): `tapin.outbox.messages{status}` i `tapin.outbox.oldest.pending.age` – alarm na rast `FAILED`
-ili staru `PENDING` poruku.
+Operativni nadzor (dohvat, upozorenje, retry) opisan je u odjeljku [Operativni nadzor](#operativni-nadzor).
 
 ## Konkurentnost
 
@@ -84,6 +70,94 @@ Ublažavanje:
   koji podržava idempotentnost (npr. `Idempotency-Key` zaglavlje) **mora** proslijediti taj ključ – tada provider
   sam odbacuje ponovljeni zahtjev unutar svog prozora idempotentnosti.
 - Poruke su sadržajno idempotentne (potvrda istog stanja), pa je duplikat neugodan, ali ne i štetan.
+
+## Operativni nadzor
+
+BJJ-30, spec §8.3, §13.1, §14. Nema zasebnog admin ekrana: operater koristi API, logove i metrike.
+
+### Stavljeno u red ≠ poslano ≠ dostavljeno
+
+| Gdje | Vrijednost | Značenje |
+|---|---|---|
+| Poslovni API (`notificationStatus`) | `QUEUED` | obavijest je upisana u outbox u istoj transakciji kao promjena – **ništa više** |
+| Poslovni API | `NOT_REQUIRED` | nema nove poruke (ponovljena identična radnja ili nema primatelja) |
+| Outbox (`status`) | `PENDING` | čeka slanje ili ponovni pokušaj |
+| Outbox | `SENT` + `acceptedByProviderAt` | **provider je prihvatio** poruku; potvrdu dostave nemamo (nema webhooka), pa se nigdje ne tvrdi „dostavljeno” |
+| Outbox | `FAILED` | trajna greška, iscrpljeni pokušaji, istekla poruka (`Stale`) ili povučeni podsjetnik |
+
+UI zato govori „stavljena u red za slanje”, nikad „poslana” ili „dostavljena”.
+
+### Pronalaženje neuspjelih poruka
+
+`GET /api/v1/admin/outbox?status=FAILED` (samo ADMIN; prijava kao administrator, isti session cookie kao web):
+
+```bash
+curl -s -b cookies.txt "https://<domena>/api/v1/admin/outbox?status=FAILED&size=50"
+```
+
+Odgovor sadrži brojače po stanju, starost najstarije `PENDING` poruke, broj `FAILED` u zadnja 24 h, stanje upozorenja
+i po poruci: tip, primatelja, `trainingId`, deduplikacijski ključ, `attemptCount`/`maxAttempts`, vrijeme zadnjeg i
+sljedećeg pokušaja, `lastError`, `acceptedByProviderAt` i `retryable`. **Sadržaj poruke (payload) se nikad ne vraća**
+– pozivnice i reset lozinke sadrže tajne poveznice. `last_error` se pri upisu i čitanju čisti (`OutboxErrors`):
+parovi `password=`, `token:`, `Authorization: Bearer …`, putanje/fragmenti poveznica i dugi neprozirni nizovi postaju `***`.
+
+Isto izravno u bazi (bez `payload` stupca!):
+
+```sql
+SELECT status, count(*) FROM email_outbox GROUP BY status;
+SELECT id, event_type, recipient_email, attempt_count, last_attempt_at, next_attempt_at, last_error
+FROM email_outbox WHERE status <> 'SENT' ORDER BY created_at;
+```
+
+### Upozorenje na dugotrajne greške
+
+`OutboxMonitor` svake minute (`tapin.outbox.alert.interval`) provjerava ima li `PENDING` poruka starijih od
+`tapin.outbox.alert.after` (zadano 30 min ≈ pet neuspjelih pokušaja). Ako ima, red je **degradiran**:
+
+- log `ERROR … OUTBOX_DEGRADED: N e-mail(s) PENDING for more than PT30M …, last error: …` pri ulasku i zatim svakih
+  `tapin.outbox.alert.repeat` (1 h); izlazak bilježi `WARN … OUTBOX_RECOVERED`. Alarm u log sustavu: tekst
+  `OUTBOX_DEGRADED`.
+- metrika `tapin.outbox.degraded` = 1; u API-ju `alert.degraded`, `degradedSince`, `stuckPending`, `latestError`.
+- uzrok „last error: none” znači da poruke nitko ne obrađuje – provjeriti radi li worker (`tapin.outbox.worker.enabled`,
+  log `Outbox worker … started`, `Outbox poll failed`).
+
+Namjerno **nije** health indikator: `DOWN` bi orkestrator protumačio kao kvar aplikacije i restartao je ili izbacio
+iz prometa, a evidencija i dalje radi ispravno (§14 – e-mail nikad ne blokira spremanje).
+
+Metrike (Micrometer, `/actuator/metrics/<ime>` samo za ADMIN):
+
+| Metrika | Opis | Prijedlog alarma |
+|---|---|---|
+| `tapin.outbox.messages{status}` | broj redaka po stanju | rast `FAILED` |
+| `tapin.outbox.oldest.pending.age` | starost najstarije `PENDING` poruke (s) | > 1800 |
+| `tapin.outbox.degraded` | 1 dok traje degradacija | = 1 |
+| `tapin.outbox.deliveries{outcome}` | pokušaji po ishodu: `SENT` (prihvaćeno), `RETRY`, `FAILED`, `LEASE_LOST` | udio `RETRY` |
+
+### Siguran ručni retry
+
+Najprije otkloniti uzrok (vjerodajnice, DNS, kvota providera, pogrešna adresa člana). Zatim:
+
+```bash
+curl -s -b cookies.txt -H "X-XSRF-TOKEN: <token>" -X POST "https://<domena>/api/v1/admin/outbox/<id>/retry"
+```
+
+- Dopušteno samo za `FAILED` poruku s `retryable=true`: vraća je u `PENDING` s novim brojem pokušaja; isti redak,
+  isti deduplikacijski ključ i isti `Message-ID`, pa ne nastaje druga poruka.
+- Drugi poziv (dvoklik, ponovljeni curl) vraća `422` jer poruka više nije `FAILED` – retry je siguran za ponavljanje.
+- `422` i za poruku s tajnom poveznicom (payload je obrisan): ponoviti poslovnu radnju („Ponovno pošalji pozivnicu”,
+  novi zahtjev za reset lozinke) – to izdaje novi token.
+- `422` i za isteklu poruku (`expires_at`, npr. podsjetnik nakon početka treninga, D-04): ne šalje se naknadno.
+- `PENDING` poruke ne treba dirati: nakon oporavka providera same odlaze po rasporedu ponovnih pokušaja (razmak
+  najviše `max-backoff` = 1 h ± 10 %). Masovni retry nakon duljeg ispada (više od ~3 h, pokušaji iscrpljeni): pozvati endpoint
+  za svaki `retryable` redak iz popisa – poruke su sadržajno idempotentne, a at-least-once vrijedi kao i inače.
+- **Ne** mijenjati `email_outbox` ručnim `UPDATE`-om: zaobilazi provjere iznad (tajni payload, istek, lease).
+
+### Oporavak nakon kvara providera (provjereno)
+
+`OutboxOperationsIntegrationTest` simulira ispad providera: evidencija dolaska i ispravak spremaju se normalno
+(`notificationStatus=QUEUED`), poruke ostaju `PENDING` s rastućim `attemptCount` i očišćenim `lastError`, nakon
+30 min upozorenje se uključuje, a kad provider ponovno radi, red se sam isprazni (`SENT`), upozorenje se gasi i
+nijedna poruka nije poslana dvaput. Test pokriva i ručni retry (dvoklik, tajni payload, 404) i pristup samo za ADMIN.
 
 ## Provideri
 
