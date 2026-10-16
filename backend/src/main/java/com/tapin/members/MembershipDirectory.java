@@ -1,0 +1,75 @@
+package com.tapin.members;
+
+import com.tapin.auth.UserAccountService;
+import com.tapin.auth.UserAccountService.UserProfile;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.ZoneId;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Public read API of the members module for other modules: the club and display data of memberships. Other modules
+ * reference memberships by id only and never read the members tables directly.
+ */
+@Service
+public class MembershipDirectory {
+
+    private final ClubRepository clubs;
+    private final ClubMembershipRepository memberships;
+    private final UserAccountService userAccounts;
+
+    MembershipDirectory(ClubRepository clubs, ClubMembershipRepository memberships, UserAccountService userAccounts) {
+        this.clubs = clubs;
+        this.memberships = memberships;
+        this.userAccounts = userAccounts;
+    }
+
+    public record ClubRef(long clubId, String name, ZoneId timeZone) {
+    }
+
+    public record MemberRef(long membershipId, long userId, String firstName, String lastName, String email,
+                            Set<Role> roles, MembershipStatus status) {
+
+        /** Holds an operational staff role (trainer capabilities; ADMIN includes them, spec §2.1). */
+        public boolean isStaff() {
+            return roles.contains(Role.TRAINER) || roles.contains(Role.ADMIN);
+        }
+    }
+
+    /** The single club of the MVP. */
+    @Transactional(readOnly = true)
+    public ClubRef theClub() {
+        List<Club> all = clubs.findAll();
+        if (all.size() != 1) {
+            throw new IllegalStateException("Expected exactly one club, found " + all.size());
+        }
+        Club club = all.getFirst();
+        return new ClubRef(club.getId(), club.getName(), club.getTimeZone());
+    }
+
+    /** @return memberships by id in the order requested; unknown ids are absent from the map */
+    @Transactional(readOnly = true)
+    public Map<Long, MemberRef> findAll(Collection<Long> membershipIds) {
+        if (membershipIds.isEmpty()) {
+            return Map.of();
+        }
+        List<ClubMembership> found = memberships.findAllById(membershipIds);
+        Map<Long, UserProfile> profiles = userAccounts.findProfiles(found.stream().map(ClubMembership::getUserId).toList());
+        Map<Long, MemberRef> result = new LinkedHashMap<>();
+        for (Long id : membershipIds) {
+            found.stream().filter(m -> m.getId().equals(id)).findFirst().ifPresent(m -> {
+                UserProfile user = profiles.get(m.getUserId());
+                if (user != null) {
+                    result.put(id, new MemberRef(m.getId(), m.getUserId(), user.firstName(), user.lastName(),
+                            user.email(), m.getRoles(), m.getStatus()));
+                }
+            });
+        }
+        return result;
+    }
+}

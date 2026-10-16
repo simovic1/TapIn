@@ -7,6 +7,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 
 /** Public API of the auth module for user accounts. Other modules reference users only by {@code userId}. */
@@ -64,6 +67,15 @@ public class UserAccountService {
     public Optional<UserProfile> findProfile(long userId) {
         return users.findById(userId).map(u -> new UserProfile(u.getId(), u.getEmail(), u.getFirstName(),
                 u.getLastName(), u.getPhone(), u.getAccountStatus(), u.getVersion()));
+    }
+
+    /** Batch lookup for display (names of coaches, notification recipients); unknown ids are skipped. */
+    @Transactional(readOnly = true)
+    public Map<Long, UserProfile> findProfiles(Collection<Long> userIds) {
+        Map<Long, UserProfile> result = new HashMap<>();
+        users.findAllById(userIds).forEach(u -> result.put(u.getId(), new UserProfile(u.getId(), u.getEmail(),
+                u.getFirstName(), u.getLastName(), u.getPhone(), u.getAccountStatus(), u.getVersion())));
+        return result;
     }
 
     public record UserProfile(long userId, String email, String firstName, String lastName, String phone,

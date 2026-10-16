@@ -67,6 +67,11 @@ tapin:
     from: ${MAIL_FROM}
     # smtp (any SMTP relay / provider SMTP endpoint; Mailpit locally) or log (substitute provider, logs only)
     provider: ${MAIL_PROVIDER:smtp}
+  schedule:
+    # Sessions are materialised from weekly rules this many days ahead (spec §4.2).
+    horizon-days: 60
+    materialize-interval: 6h
+    held-transition-interval: 1m
   outbox:
     poll-interval: 10s
     batch-size: 20

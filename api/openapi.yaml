@@ -888,7 +888,12 @@ paths:
       tags: [Trainings]
       operationId: updateRecurringSchedule
       summary: Izmjena budućeg rasporeda
-      description: Djeluje samo na buduće, još nematerijalizirane ili neizmijenjene termine.
+      description: |
+        Djeluje samo na budućnost; prošli termini i `validFrom` se ne mijenjaju. Odluka D-02: već generirani budući
+        termini pravila koji su `SCHEDULED`, još nisu počeli i nisu pojedinačno pomaknuti prate novo vrijeme
+        (prijavljeni dobivaju obavijest o promjeni termina); termini koje pravilo više ne obuhvaća (`validTo`,
+        `enabled=false`) se **otkazuju**, ne brišu. Pojedinačno izmijenjeni i otkazani termini ostaju nepromijenjeni.
+        Preklapanje s drugim pravilom istog dana → `409 TRAINING_OVERLAP`.
       security:
         - sessionCookie: []
           csrfToken: []

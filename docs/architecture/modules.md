@@ -10,7 +10,7 @@ moduli. Svaki modul je Java paket `com.tapin.<modul>` i ima parnjak u `frontend/
 | `shared` | Greške (`problem+json`), OpenAPI, sat/vremenska zona, raspoređivanje, zajednički API tipovi | — | `/system/**` | `lib/`, `components/` | 0 |
 | `auth` | Spring Security konfiguracija, login/logout (sesija, CSRF), autorizacija endpointa, pozivnice, reset lozinke, hash lozinki i tokena | `users`, `invitations`, `password_reset_tokens` | `/auth/**`, `/me` | `features/auth` | 1 |
 | `members` | Klub, članstvo, uloge, status članstva, profil | `clubs`, `club_memberships`, `membership_roles`, `membership_status_events` | `/members/**` | `features/members` | 1 |
-| `scheduling` | Ponavljajuća pravila, materijalizacija termina, izmjene/otkazivanja, treneri termina | `recurring_schedules`, `training_sessions`, `session_coaches` | `/trainings/**`, `/recurring-schedules/**` | `features/trainings` | 2 |
+| `scheduling` | Ponavljajuća pravila, materijalizacija termina, izmjene/otkazivanja, treneri termina | `recurring_schedules`, `training_sessions`, `session_coaches`, `training_session_events` | `/trainings/**`, `/recurring-schedules/**` | `features/trainings` | 2 |
 | `registrations` | Prijava/otkazivanje prijave člana | `training_registrations`, `registration_events` | `/trainings/{id}/my-registration` | `features/trainings` | 2 |
 | `attendance` | **Poslovna jezgra**: PRESENT/ABSENT, masovno označavanje, optimistično zaključavanje, audit | `training_attendances`, `attendance_audit_logs` | `/trainings/{id}/roster`, `/trainings/{id}/attendance/**` | `features/attendance` | 3 |
 | `belts` | Povijest pojaseva, promocije, ispravci uz audit | `member_belt_periods`, `belt_period_audit_logs` | `/members/{id}/belts/**`, `/me/belts` | `features/belts` | 4 |
