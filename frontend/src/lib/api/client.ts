@@ -5,17 +5,11 @@
  * - Errors: `application/problem+json` bodies are turned into {@link ApiError}.
  */
 
+import type { Problem } from './types';
+
 export const API_BASE = '/api/v1';
 
-export interface Problem {
-  type?: string;
-  title?: string;
-  status: number;
-  detail?: string;
-  instance?: string;
-  errorCode?: string;
-  fieldErrors?: Record<string, string>;
-}
+export type { Problem } from './types';
 
 export class ApiError extends Error {
   readonly problem: Problem;
@@ -55,7 +49,15 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as Partial<Problem> | null;
-    throw new ApiError({ status: response.status, ...body });
+    throw new ApiError({
+      type: 'about:blank',
+      title: response.statusText,
+      detail: response.statusText,
+      instance: path,
+      errorCode: response.status >= 500 ? 'INTERNAL_ERROR' : 'MALFORMED_REQUEST',
+      ...body,
+      status: response.status,
+    });
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;

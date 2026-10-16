@@ -31,3 +31,7 @@ Thumbs.db
 # --- Claude Code local settings ---
 .claude/settings.local.json
 .claude/launch.json
+
+# API contract tooling
+api/node_modules/
+api/.schema.check.d.ts

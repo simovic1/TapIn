@@ -10,7 +10,9 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -32,22 +34,32 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     ProblemDetail handleApi(ApiException ex, HttpServletRequest request) {
-        return problem(ex.errorCode(), ex.getMessage(), request);
+        ProblemDetail problem = problem(ex.errorCode(), ex.getMessage(), request);
+        if (ex.currentState() != null) {
+            problem.setProperty("currentState", ex.currentState());
+        }
+        return problem;
     }
 
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
     ProblemDetail handleOptimisticLock(ObjectOptimisticLockingFailureException ex, HttpServletRequest request) {
-        return problem(ErrorCode.CONFLICT, "Zapis je u međuvremenu izmijenjen. Osvježite podatke i pokušajte ponovno.",
+        return problem(ErrorCode.VERSION_CONFLICT, "Zapis je u međuvremenu izmijenjen. Osvježite podatke i pokušajte ponovno.",
                 request);
     }
 
     @ExceptionHandler(AuthenticationException.class)
     ProblemDetail handleAuthentication(AuthenticationException ex, HttpServletRequest request) {
+        if (ex instanceof BadCredentialsException) {
+            return problem(ErrorCode.INVALID_CREDENTIALS, "Neispravan e-mail ili lozinka.", request);
+        }
         return problem(ErrorCode.UNAUTHENTICATED, "Potrebna je prijava.", request);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     ProblemDetail handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
+        if (ex instanceof CsrfException) {
+            return problem(ErrorCode.CSRF_TOKEN_INVALID, "Sigurnosni token nije valjan. Osvježite stranicu.", request);
+        }
         return problem(ErrorCode.FORBIDDEN, "Nemate ovlast za ovu radnju.", request);
     }
 
@@ -76,7 +88,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             HttpStatusCode statusCode, WebRequest request) {
         if (body instanceof ProblemDetail problem
                 && (problem.getProperties() == null || !problem.getProperties().containsKey("errorCode"))) {
-            problem.setProperty("errorCode", codeFor(statusCode).name());
+            ErrorCode code = codeFor(statusCode);
+            problem.setType(URI.create(code.typeUri()));
+            problem.setProperty("errorCode", code.name());
         }
         return super.createResponseEntity(body, headers, statusCode, request);
     }
@@ -91,14 +105,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static ErrorCode codeFor(HttpStatusCode status) {
         return switch (status.value()) {
-            case 400 -> ErrorCode.VALIDATION_FAILED;
             case 401 -> ErrorCode.UNAUTHENTICATED;
             case 403 -> ErrorCode.FORBIDDEN;
             case 404 -> ErrorCode.NOT_FOUND;
+            case 405 -> ErrorCode.METHOD_NOT_ALLOWED;
             case 409 -> ErrorCode.CONFLICT;
             case 422 -> ErrorCode.BUSINESS_RULE_VIOLATION;
-            case 429 -> ErrorCode.TOO_MANY_REQUESTS;
-            default -> status.is5xxServerError() ? ErrorCode.INTERNAL_ERROR : ErrorCode.VALIDATION_FAILED;
+            case 429 -> ErrorCode.RATE_LIMITED;
+            default -> status.is5xxServerError() ? ErrorCode.INTERNAL_ERROR : ErrorCode.MALFORMED_REQUEST;
         };
     }
 }

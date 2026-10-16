@@ -56,6 +56,10 @@ class WebSecurityAndErrorsTest {
         mvc.perform(get("/api/v1/me"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.type").value("urn:tapin:error:unauthenticated"))
+                .andExpect(jsonPath("$.title").exists())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.detail").exists())
                 .andExpect(jsonPath("$.errorCode").value("UNAUTHENTICATED"))
                 .andExpect(jsonPath("$.instance").value("/api/v1/me"));
     }
@@ -71,13 +75,14 @@ class WebSecurityAndErrorsTest {
     void stateChangingRequestWithoutCsrfTokenIsRejected() throws Exception {
         mvc.perform(post("/api/v1/system/info"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));
+                .andExpect(jsonPath("$.errorCode").value("CSRF_TOKEN_INVALID"));
     }
 
     @Test
     void stateChangingRequestWithCsrfTokenPassesCsrfFilter() throws Exception {
         mvc.perform(post("/api/v1/system/info").with(csrf()))
                 .andExpect(status().isMethodNotAllowed())
-                .andExpect(jsonPath("$.errorCode").exists());
+                .andExpect(jsonPath("$.errorCode").value("METHOD_NOT_ALLOWED"))
+                .andExpect(jsonPath("$.type").value("urn:tapin:error:method-not-allowed"));
     }
 }

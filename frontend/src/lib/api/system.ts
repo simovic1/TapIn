@@ -1,13 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from './client';
+import type { Schemas } from './types';
 
-export interface SystemInfo {
-  application: string;
-  version: string;
-  clubName: string;
-  timeZone: string;
-  serverTime: string;
-}
+export type SystemInfo = Schemas['SystemInfo'];
 
 export const systemKeys = {
   info: ['system', 'info'] as const,

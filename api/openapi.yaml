@@ -1,0 +1,2298 @@
+openapi: 3.1.0
+info:
+  title: TapIn API
+  version: 1.0.0
+  summary: Evidencija BJJ treninga – REST API v1 (ugovor za MVP)
+  description: |
+    Ugovor (contract-first) za `/api/v1` prema specifikaciji MVP v1.1, §11. Izvor istine za backend i frontend;
+    frontend iz njega generira tipove (`npm --prefix api run types`) i pokreće mock (`npm --prefix api run mock`).
+
+    ## Konvencije
+
+    **Autentikacija.** Session cookie `TAPIN_SESSION` (HttpOnly, Secure, SameSite=Lax), isti origin za SPA i API.
+    Svaki zahtjev koji mijenja stanje (POST, PUT, PATCH, DELETE) mora poslati zaglavlje `X-XSRF-TOKEN` s vrijednošću
+    iz čitljivog cookieja `XSRF-TOKEN` – i javni (`/auth/login`, ...). Endpointi su zaštićeni osim onih s `security: []`.
+
+    **Autorizacija.** Uloge su aditivne (`MEMBER`, `TRAINER`, `ADMIN`). Potrebne uloge navedene su u opisu operacije
+    i u proširenju `x-roles`; `x-roles: [ANY]` znači bilo koji prijavljeni korisnik. Nedostatak uloge → `403`.
+
+    **userId vs. membershipId.** `userId` identificira račun/osobu (`users`) – prijava, autor izmjene (`actorUserId`,
+    `updatedByUserId`). `membershipId` identificira članstvo u klubu (`club_memberships`) – sve članske radnje:
+    prijave, prisutnost, pojasevi, statistika, uloge. Putanje `/members/{membershipId}/...` uvijek primaju
+    **membershipId**. Polje `memberId` se ne koristi kako bi se izbjegla zabuna.
+
+    **Datumi i vrijeme.**
+    - Trenuci: `date-time` u UTC s oznakom `Z` (npr. `2026-10-20T16:30:00Z`).
+    - Kalendarski datumi (`*On`, `*Date`, `localDate`): `date` (`YYYY-MM-DD`) u vremenskoj zoni kluba `Europe/Zagreb`.
+    - Lokalno vrijeme rasporeda: `HH:mm` u `Europe/Zagreb` (npr. `18:30`); DST ne pomiče lokalni početak.
+    - Upitni parametri `from`/`to` su poluotvoreni interval `[from, to)`.
+
+    **Paginacija.** Popisi koji mogu rasti (`/members`, audit, izvještaji, povijest) primaju `page` (od 0), `size`
+    (zadano 20, najviše 100) i `sort` (`polje,asc|desc`). Odgovor: `{ "items": [...], "page": PageMetadata }`.
+    Ograničeni popisi (raspored u intervalu, roster, pravila rasporeda) vraćaju `{ "items": [...] }` bez paginacije.
+
+    **Optimistično zaključavanje.** Resursi s poljem `version` mijenjaju se samo uz `expectedVersion` jednak zadnje
+    pročitanoj vrijednosti. Neusklađenost → `409` s `errorCode=VERSION_CONFLICT` i trenutačnim stanjem u
+    `currentState`; klijent osvježava redak i korisnik ponovno odlučuje.
+
+    **Idempotencija i obavijesti.** Ponovljena identična radnja vraća `200` s `changed=false` i
+    `notificationStatus=NOT_REQUIRED` – bez novog audit zapisa i bez e-maila. Stvarna promjena vraća
+    `notificationStatus=QUEUED`: obavijest je upisana u outbox u istoj transakciji, **ne** znači da je e-mail dostavljen.
+
+    **Prisutnost.** `attendanceStatus` je `PRESENT`, `ABSENT` ili `UNMARKED`. `UNMARKED` znači da zapis prisutnosti
+    ne postoji (još nije odlučeno); nikad se ne šalje kao zahtjev za upis – povratak na `UNMARKED` je `DELETE`.
+
+    **Pogreške.** Sve pogreške su `application/problem+json` (RFC 9457) s poljima `type`, `title`, `status`,
+    `detail`, `instance` i `errorCode`. Namjena statusa:
+
+    | Status | Namjena | Primjeri `errorCode` |
+    |---|---|---|
+    | 400 | Sintaktički ili validacijski neispravan zahtjev (oblik podataka) | `VALIDATION_FAILED`, `MALFORMED_REQUEST` |
+    | 401 | Korisnik nije prijavljen ili su vjerodajnice pogrešne | `UNAUTHENTICATED`, `INVALID_CREDENTIALS` |
+    | 403 | Prijavljen, ali bez ovlasti za radnju/resurs; neispravan CSRF token | `FORBIDDEN`, `ROLE_ASSIGNMENT_FORBIDDEN`, `CSRF_TOKEN_INVALID` |
+    | 404 | Resurs ne postoji (ili nije u ovom klubu) | `NOT_FOUND` |
+    | 409 | Sukob stanja: istodobna izmjena, duplikat, već evidentirana prisutnost | `VERSION_CONFLICT`, `DUPLICATE_RESOURCE`, `ATTENDANCE_ALREADY_RECORDED`, `TRAINING_OVERLAP`, `BELT_DUPLICATE_EFFECTIVE_DATE` |
+    | 422 | Zahtjev je ispravan, ali ga poslovno pravilo ne dopušta | `BUSINESS_RULE_VIOLATION`, `MEMBERSHIP_INACTIVE`, `TRAINING_CANCELLED`, `LAST_ADMIN_REMOVAL`, `BELT_CHRONOLOGY_INVALID`, `INVITATION_INVALID_OR_EXPIRED`, `PASSWORD_RESET_TOKEN_INVALID` |
+    | 429 | Previše pokušaja (prijava, reset lozinke, pozivnice); zaglavlje `Retry-After` | `RATE_LIMITED` |
+    | 500 | Neočekivana pogreška | `INTERNAL_ERROR` |
+  contact:
+    name: TapIn
+  license:
+    name: MIT
+    identifier: MIT
+
+servers:
+  - url: /api/v1
+    description: Isti origin kao web sučelje
+
+security:
+  - sessionCookie: []
+
+tags:
+  - name: System
+    description: Metapodaci aplikacije (javno)
+  - name: Auth
+    description: Prijava, odjava, pozivnice, reset lozinke i vlastiti profil (§11.1)
+  - name: Members
+    description: Članovi, pozivnice, uloge i status članstva (§11.2)
+  - name: Belts
+    description: Povijest pojaseva i promocije – bez crtica (§3.3, §11.2)
+  - name: Trainings
+    description: Raspored i termini (§11.3)
+  - name: Registrations
+    description: Prijava i otkazivanje prijave na trening (§11.4)
+  - name: Attendance
+    description: Prozivka, evidencija prisutnosti i audit (§11.4)
+  - name: Statistics
+    description: Statistika članova (§9, §11.2)
+  - name: Reports
+    description: Izvještaji i CSV izvoz (§11.5)
+
+paths:
+  # ------------------------------------------------------------------ System
+  /system/info:
+    get:
+      tags: [System]
+      operationId: getSystemInfo
+      summary: Osnovni podaci o aplikaciji i klubu
+      security: []
+      x-roles: [PUBLIC]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SystemInfo' }
+              example:
+                application: TapIn
+                version: 0.1.0
+                clubName: BJJ klub
+                timeZone: Europe/Zagreb
+                serverTime: '2026-10-20T14:00:00Z'
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  # ------------------------------------------------------------------ Auth
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Prijava e-mailom i lozinkom; uspostavlja sesiju
+      description: Postavlja cookie `TAPIN_SESSION` i rotira CSRF token. Ograničen broj pokušaja (`429`).
+      security:
+        - csrfToken: []
+      x-roles: [PUBLIC]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Prijavljen
+          headers:
+            Set-Cookie:
+              description: '`TAPIN_SESSION=...; Path=/; Secure; HttpOnly; SameSite=Lax`'
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CurrentUser' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/InvalidCredentials' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: Odjava (poništava sesiju)
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      x-roles: [ANY]
+      responses:
+        '204': { description: Odjavljen }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /auth/invitations/preview:
+    post:
+      tags: [Auth]
+      operationId: previewInvitation
+      summary: Podaci iz pozivnice prije aktivacije
+      description: |
+        Dopuna §11.1: prikaz e-maila, imena i kluba na ekranu aktivacije ("potvrđuje podatke", §3.2).
+        Token se šalje u tijelu (ne u URL-u) da ne završi u logovima.
+      x-spec-addition: true
+      security:
+        - csrfToken: []
+      x-roles: [PUBLIC]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InvitationTokenRequest' }
+      responses:
+        '200':
+          description: Pozivnica je valjana
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvitationPreview' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/invitations/accept:
+    post:
+      tags: [Auth]
+      operationId: acceptInvitation
+      summary: Aktivacija pozivnice i postavljanje lozinke
+      description: Jednokratno; nakon uspjeha korisnik je prijavljen. Istekao/iskorišten token → `422 INVITATION_INVALID_OR_EXPIRED`.
+      security:
+        - csrfToken: []
+      x-roles: [PUBLIC]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AcceptInvitationRequest' }
+      responses:
+        '200':
+          description: Račun aktiviran, sesija uspostavljena
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CurrentUser' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/password-reset/request:
+    post:
+      tags: [Auth]
+      operationId: requestPasswordReset
+      summary: Zahtjev za reset lozinke
+      description: Uvijek `202`, bez otkrivanja postoji li e-mail (§3.2). Ograničen broj pokušaja.
+      security:
+        - csrfToken: []
+      x-roles: [PUBLIC]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordResetRequest' }
+      responses:
+        '202': { description: 'Zahtjev zaprimljen (ako račun postoji, e-mail je stavljen u red)' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/password-reset/confirm:
+    post:
+      tags: [Auth]
+      operationId: confirmPasswordReset
+      summary: Potvrda reseta i nova lozinka
+      security:
+        - csrfToken: []
+      x-roles: [PUBLIC]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordResetConfirmRequest' }
+      responses:
+        '204': { description: Lozinka promijenjena; postojeće sesije korisnika su poništene }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /me:
+    get:
+      tags: [Auth]
+      operationId: getCurrentUser
+      summary: Trenutni korisnik, uloge i članstvo
+      x-roles: [ANY]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CurrentUser' }
+              example:
+                userId: 77
+                membershipId: 123
+                email: ana.horvat@example.com
+                firstName: Ana
+                lastName: Horvat
+                phone: '+385 91 123 4567'
+                accountStatus: ACTIVE
+                membershipStatus: ACTIVE
+                roles: [MEMBER, TRAINER]
+                joinedOn: '2024-03-01'
+                club: { name: BJJ klub, timeZone: Europe/Zagreb }
+                version: 4
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /me/profile:
+    patch:
+      tags: [Auth]
+      operationId: updateOwnProfile
+      summary: Izmjena vlastitih dopuštenih polja (telefon)
+      description: Pojas, uloge, status i datum učlanjenja nisu dopušteni ovdje.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      x-roles: [ANY]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateOwnProfileRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CurrentUser' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /me/statistics:
+    get:
+      tags: [Statistics]
+      operationId: getOwnStatistics
+      summary: Vlastita statistika, uključujući treninge po pojasu
+      x-roles: [ANY]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MemberStatistics' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /me/attendance:
+    get:
+      tags: [Statistics]
+      operationId: listOwnAttendanceHistory
+      summary: Vlastita povijest treninga (datum, prijava, prisutnost)
+      description: Dopuna §9.1 ("povijest treninga, datum i status") kao paginirani popis.
+      x-spec-addition: true
+      x-roles: [ANY]
+      parameters:
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendanceHistoryPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /me/belts:
+    get:
+      tags: [Belts]
+      operationId: getOwnBeltHistory
+      summary: Vlastita povijest pojaseva i broj treninga po pojasu
+      x-roles: [ANY]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BeltHistory' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ------------------------------------------------------------------ Members
+  /members:
+    get:
+      tags: [Members]
+      operationId: listMembers
+      summary: Popis i pretraga članova
+      x-roles: [TRAINER, ADMIN]
+      parameters:
+        - name: q
+          in: query
+          description: Pretraga po imenu, prezimenu ili e-mailu (bez razlikovanja velikih/malih slova)
+          schema: { type: string, maxLength: 100 }
+        - name: membershipStatus
+          in: query
+          schema: { $ref: '#/components/schemas/MembershipStatus' }
+        - name: role
+          in: query
+          schema: { $ref: '#/components/schemas/Role' }
+        - name: belt
+          in: query
+          schema: { $ref: '#/components/schemas/CurrentBelt' }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - name: sort
+          in: query
+          description: 'Dopuštena polja: `lastName`, `firstName`, `joinedOn`, `lastPresentOn`. Zadano `lastName,asc`.'
+          schema: { type: string, default: 'lastName,asc', pattern: '^(lastName|firstName|joinedOn|lastPresentOn),(asc|desc)$' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MemberSummaryPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /members/invitations:
+    post:
+      tags: [Members]
+      operationId: inviteMember
+      summary: Pozivanje novog člana
+      description: |
+        TRAINER smije pozvati samo s ulogom `MEMBER`; pokušaj dodjele `TRAINER`/`ADMIN` → `403 ROLE_ASSIGNMENT_FORBIDDEN`.
+        ADMIN smije dodijeliti bilo koju ulogu. Postojeći e-mail (bez obzira na velika/mala slova) → `409 DUPLICATE_RESOURCE`.
+        Pozivnica vrijedi 7 dana.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      x-roles: [TRAINER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InviteMemberRequest' }
+      responses:
+        '201':
+          description: Korisnik kreiran sa statusom `INVITED`, pozivnica stavljena u red za slanje
+          headers:
+            Location:
+              schema: { type: string, example: /api/v1/members/42 }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvitationResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /members/{membershipId}/invitations/resend:
+    post:
+      tags: [Members]
+      operationId: resendInvitation
+      summary: Ponovno slanje pozivnice
+      description: Poništava prethodni token i izdaje novi (7 dana). Samo za račune u statusu `INVITED`, inače `422`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      x-roles: [TRAINER, ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/MembershipId'
+      responses:
+        '202':
+          description: Nova pozivnica stavljena u red za slanje
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvitationResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /members/{membershipId}:
+    parameters:
+      - $ref: '#/components/parameters/MembershipId'
+    get:
+      tags: [Members]
+      operationId: getMember
+      summary: Profil člana
+      x-roles: [TRAINER, ADMIN]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MemberDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Members]
+      operationId: updateMember
+      summary: Izmjena osnovnih podataka, datuma učlanjenja i statusa članstva
+      description: |
+        Ne mijenja pojas (za to `/members/{membershipId}/belts`). Promjena statusa bilježi `membership_status_events`.
+        Deaktivacija zadnjeg aktivnog administratora → `422 LAST_ADMIN_REMOVAL`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      x-roles: [ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateMemberRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MemberDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+
+  /members/{membershipId}/roles:
+    put:
+      tags: [Members]
+      operationId: replaceMemberRoles
+      summary: Dodjela uloga (zamjenjuje cijeli skup)
+      description: Najmanje jedna uloga. Uklanjanje uloge ADMIN zadnjem aktivnom administratoru → `422 LAST_ADMIN_REMOVAL`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      x-roles: [ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/MembershipId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReplaceRolesRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MemberDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+
+  /members/{membershipId}/statistics:
+    get:
+      tags: [Statistics]
+      operationId: getMemberStatistics
+      summary: Statistika člana
+      description: MEMBER bez uloge TRAINER/ADMIN dobiva `403` i za tuđi i za vlastiti `membershipId` – vlastita je na `/me/statistics` (AC-17).
+      x-roles: [TRAINER, ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/MembershipId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MemberStatistics' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /members/{membershipId}/attendance:
+    get:
+      tags: [Statistics]
+      operationId: listMemberAttendanceHistory
+      summary: Povijest treninga člana
+      x-spec-addition: true
+      x-roles: [TRAINER, ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/MembershipId'
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendanceHistoryPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ------------------------------------------------------------------ Belts
+  /members/{membershipId}/belts:
+    parameters:
+      - $ref: '#/components/parameters/MembershipId'
+    get:
+      tags: [Belts]
+      operationId: getMemberBeltHistory
+      summary: Povijest pojaseva člana i broj treninga po pojasu
+      description: MEMBER koji nije TRAINER/ADMIN dobiva `403` bez otkrivanja podataka (AC-29).
+      x-roles: [TRAINER, ADMIN]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BeltHistory' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Belts]
+      operationId: createBeltPeriod
+      summary: Nova promocija ili početni/povijesni unos pojasa
+      description: |
+        `effectiveFromDate` se izračunava iz `awardedOn` i `promotionTiming`: `AFTER_TRAINING` → sljedeći dan,
+        `BEFORE_TRAINING` → isti dan. Za povijesni unos bez poznatog datuma dodjele (`awardedOn: null`) obvezan je
+        `effectiveFromDate`. Isti efektivni datum kao postojeći → `409 BELT_DUPLICATE_EFFECTIVE_DATE`;
+        neispravan kronološki slijed ili niži pojas → `422 BELT_CHRONOLOGY_INVALID`. Polaznik → `403` (AC-28).
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      x-roles: [TRAINER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateBeltPeriodRequest' }
+            examples:
+              promotionAfterTraining:
+                summary: Promocija na kraju treninga (§11.6)
+                value:
+                  belt: BLUE
+                  awardedOn: '2026-10-15'
+                  promotionTiming: AFTER_TRAINING
+                  note: Promocija nakon redovnog treninga
+              historicalUnknownDate:
+                summary: Raniji pojas bez poznatog datuma dodjele
+                value:
+                  belt: WHITE
+                  awardedOn: null
+                  effectiveFromDate: '2024-03-01'
+                  note: Početni pojas od datuma učlanjenja
+      responses:
+        '201':
+          description: Razdoblje kreirano; vraća ažuriranu povijest
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BeltPeriodMutationResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+
+  /members/{membershipId}/belts/{beltPeriodId}:
+    patch:
+      tags: [Belts]
+      operationId: correctBeltPeriod
+      summary: Ispravak pojasa ili datuma uz audit
+      description: |
+        Kontrolirana korekcija s `expectedVersion`; nastaje zapis u auditu pojaseva. Treninzi se ponovno raspodjeljuju
+        (AC-26). Istodobna izmjena → `409 VERSION_CONFLICT` sa svježim stanjem (AC-30). Brisanje nije dio MVP-a.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      x-roles: [TRAINER, ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/MembershipId'
+        - $ref: '#/components/parameters/BeltPeriodId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CorrectBeltPeriodRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BeltPeriodMutationResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+
+  /members/{membershipId}/belts/audit:
+    get:
+      tags: [Belts]
+      operationId: listBeltAudit
+      summary: Povijest ispravaka pojaseva
+      x-roles: [TRAINER, ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/MembershipId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: OK (najnovije prvo)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BeltAuditPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ------------------------------------------------------------------ Trainings
+  /trainings:
+    get:
+      tags: [Trainings]
+      operationId: listTrainings
+      summary: Vidljivi termini u razdoblju
+      description: |
+        Interval `[from, to)` najviše 92 dana; bez parametara: od sada sljedećih 14 dana. Sortirano po `startAt`.
+        Polja `myRegistrationStatus`/`myAttendanceStatus` odnose se na članstvo prijavljenog korisnika.
+      x-roles: [ANY]
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: status
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: { $ref: '#/components/schemas/TrainingStatus' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TrainingList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Trainings]
+      operationId: createTraining
+      summary: Izvanredni ili povijesni trening
+      description: |
+        `historical: true` kreira termin u prošlosti sa statusom `HELD` za naknadni unos dolazaka (AC-16).
+        Preklapanje s aktivnim terminom → `409 TRAINING_OVERLAP`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      x-roles: [TRAINER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTrainingRequest' }
+      responses:
+        '201':
+          description: Kreirano
+          headers:
+            Location:
+              schema: { type: string, example: /api/v1/trainings/456 }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TrainingDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+
+  /trainings/{trainingId}:
+    parameters:
+      - $ref: '#/components/parameters/TrainingId'
+    get:
+      tags: [Trainings]
+      operationId: getTraining
+      summary: Detalji treninga
+      x-roles: [ANY]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TrainingDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Trainings]
+      operationId: updateTraining
+      summary: Pomicanje ili izmjena pojedinačnog termina
+      description: |
+        Izmijenjeni termin iz pravila ostaje vezan uz originalni `occurrenceDate` i ne nastaje ponovno pri
+        generiranju (AC-12). Promjena vremena šalje obavijest prijavljenima (`notificationStatus=QUEUED`).
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      x-roles: [TRAINER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTrainingRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TrainingMutationResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+
+  /trainings/{trainingId}/cancel:
+    post:
+      tags: [Trainings]
+      operationId: cancelTraining
+      summary: Otkazivanje termina
+      description: Ne briše ponavljajuće pravilo. Prijavljeni dobivaju obavijest (AC-11). Ponovno otkazivanje je idempotentno.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      x-roles: [TRAINER, ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/TrainingId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CancelTrainingRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TrainingMutationResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /recurring-schedules:
+    get:
+      tags: [Trainings]
+      operationId: listRecurringSchedules
+      summary: Pravila rasporeda
+      x-roles: [ANY]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecurringScheduleList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Trainings]
+      operationId: createRecurringSchedule
+      summary: Novo pravilo rasporeda
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      x-roles: [TRAINER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateRecurringScheduleRequest' }
+      responses:
+        '201':
+          description: Kreirano
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecurringSchedule' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+
+  /recurring-schedules/{scheduleId}:
+    patch:
+      tags: [Trainings]
+      operationId: updateRecurringSchedule
+      summary: Izmjena budućeg rasporeda
+      description: Djeluje samo na buduće, još nematerijalizirane ili neizmijenjene termine.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      x-roles: [TRAINER, ADMIN]
+      parameters:
+        - name: scheduleId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/ScheduleId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateRecurringScheduleRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecurringSchedule' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+
+  # ------------------------------------------------------------------ Registrations
+  /trainings/{trainingId}/my-registration:
+    parameters:
+      - $ref: '#/components/parameters/TrainingId'
+    put:
+      tags: [Registrations]
+      operationId: registerForTraining
+      summary: Prijava trenutnog člana na trening (idempotentno)
+      description: |
+        Bez tijela zahtjeva. Već prijavljen → `200`, `changed=false`, `notificationStatus=NOT_REQUIRED` (AC-03).
+        Ponovna prijava nakon otkazivanja dopuštena je dok nema evidentirane prisutnosti.
+        Neaktivno članstvo → `422 MEMBERSHIP_INACTIVE`; otkazan termin → `422 TRAINING_CANCELLED`;
+        evidentirana prisutnost → `409 ATTENDANCE_ALREADY_RECORDED`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      x-roles: [MEMBER]
+      responses:
+        '200':
+          description: Prijavljen
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyRegistrationResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+    delete:
+      tags: [Registrations]
+      operationId: cancelMyRegistration
+      summary: Otkazivanje vlastite prijave
+      description: |
+        Dopušteno bilo kada dok za člana nema `PRESENT`/`ABSENT` (AC-04). Nakon evidencije →
+        `409 ATTENDANCE_ALREADY_RECORDED` (AC-05). Već otkazano → `200`, `changed=false`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      x-roles: [MEMBER]
+      responses:
+        '200':
+          description: Prijava otkazana
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyRegistrationResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  # ------------------------------------------------------------------ Attendance
+  /trainings/{trainingId}/roster:
+    get:
+      tags: [Attendance]
+      operationId: getRoster
+      summary: Prozivka – prijavljeni, evidentirani i brojači
+      description: |
+        Sadrži sve članove s prijavom (`REGISTERED` ili `CANCELLED`) ili zapisom prisutnosti. Dodavanje
+        neprijavljenog člana radi se izravno s `PUT .../attendance/{membershipId}` (AC-06).
+      x-roles: [TRAINER, ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/TrainingId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Roster' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /trainings/{trainingId}/attendance/{membershipId}:
+    parameters:
+      - $ref: '#/components/parameters/TrainingId'
+      - $ref: '#/components/parameters/MembershipId'
+    put:
+      tags: [Attendance]
+      operationId: setAttendance
+      summary: Postavi PRESENT ili ABSENT
+      description: |
+        `expectedVersion` mora odgovarati `attendanceVersion` iz rostera (za `UNMARKED` je to vrijednost iz
+        rostera, u pravilu `0`). Neusklađenost → `409 VERSION_CONFLICT` s trenutačnim retkom u `currentState` (AC-09).
+        Isti status kao trenutačni → `200`, `changed=false`, bez audita i e-maila (AC-10).
+        Stvarna promjena → audit zapis + `notificationStatus=QUEUED`.
+        Neaktivan član na budućem/novom terminu → `422 MEMBERSHIP_INACTIVE`; otkazan termin → `422 TRAINING_CANCELLED`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      x-roles: [TRAINER, ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetAttendanceRequest' }
+            example:
+              status: PRESENT
+              expectedVersion: 2
+              note: Dolazak potvrđen na prozivci
+      responses:
+        '200':
+          description: Spremljeno
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendanceResult' }
+              example:
+                trainingId: 456
+                membershipId: 123
+                userId: 77
+                status: PRESENT
+                version: 3
+                changed: true
+                updatedAt: '2026-10-20T16:32:00Z'
+                updatedByUserId: 5
+                notificationStatus: QUEUED
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/AttendanceConflict' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+    delete:
+      tags: [Attendance]
+      operationId: resetAttendance
+      summary: Povratak na UNMARKED (iznimni slučaj)
+      description: |
+        Uklanja zapis prisutnosti uz audit (`newStatus=UNMARKED`); član ponovno može sam otkazati prijavu.
+        Već `UNMARKED` → `200`, `changed=false`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      x-roles: [TRAINER, ADMIN]
+      parameters:
+        - name: expectedVersion
+          in: query
+          required: true
+          description: '`attendanceVersion` iz zadnjeg čitanja (DELETE nema tijelo).'
+          schema: { $ref: '#/components/schemas/Version' }
+        - name: note
+          in: query
+          schema: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: OK – `status=UNMARKED`
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendanceResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/AttendanceConflict' }
+
+  /trainings/{trainingId}/attendance/mark-unconfirmed-absent:
+    post:
+      tags: [Attendance]
+      operationId: markUnconfirmedAbsent
+      summary: Označi sve preostale (REGISTERED + UNMARKED) odsutnima
+      description: |
+        Ne mijenja `PRESENT`/`ABSENT` ni otkazane prijave (AC-07, AC-20). Za svakog promijenjenog člana nastaje
+        zaseban audit (`source=BULK`) i zasebna obavijest. Ponovni poziv je idempotentan (`updatedCount=0`).
+        `expectedMembershipIds` (opcionalno) ograničava radnju na članove prikazane u potvrdi; drugi se preskaču.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      x-roles: [TRAINER, ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/TrainingId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BulkAbsentRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BulkAttendanceResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+
+  /trainings/{trainingId}/attendance/audit:
+    get:
+      tags: [Attendance]
+      operationId: listAttendanceAudit
+      summary: Audit prisutnosti za trening (append-only)
+      x-roles: [TRAINER, ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/TrainingId'
+        - name: membershipId
+          in: query
+          schema: { $ref: '#/components/schemas/MembershipId' }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: OK (najnovije prvo)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendanceAuditPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ------------------------------------------------------------------ Reports
+  /reports/attendance:
+    get:
+      tags: [Reports]
+      operationId: getAttendanceReport
+      summary: Statistika dolazaka po članovima
+      description: Broje se treninzi (ne sati), samo `PRESENT` na `HELD` terminima, po lokalnom datumu treninga.
+      x-roles: [TRAINER, ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/ReportFrom'
+        - $ref: '#/components/parameters/ReportTo'
+        - $ref: '#/components/parameters/ReportMembershipId'
+        - $ref: '#/components/parameters/ReportBelt'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - name: sort
+          in: query
+          description: 'Dopuštena polja: `presentCount` (rangiranje), `lastName`, `noShowRate`, `lastPresentOn`. Zadano `presentCount,desc`.'
+          schema: { type: string, default: 'presentCount,desc', pattern: '^(presentCount|lastName|noShowRate|lastPresentOn),(asc|desc)$' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendanceReport' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /reports/attendance.csv:
+    get:
+      tags: [Reports]
+      operationId: exportAttendanceReportCsv
+      summary: CSV izvoz izvještaja o dolascima
+      description: |
+        Isti filteri kao `/reports/attendance`, bez paginacije (svi redovi). Format za Excel (hr):
+        UTF-8 s BOM-om, separator `;`, decimalni zarez, datumi `dd.MM.yyyy.`, CRLF.
+        Stupci: `Prezime;Ime;E-mail;Pojas;Dolasci ukupno;Dolasci u mjesecu;Zadnjih 7 dana;Zadnjih 30 dana;Prijave bez dolaska;Postotak nedolazaka;Zadnji dolazak`.
+      x-roles: [TRAINER, ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/ReportFrom'
+        - $ref: '#/components/parameters/ReportTo'
+        - $ref: '#/components/parameters/ReportMembershipId'
+        - $ref: '#/components/parameters/ReportBelt'
+      responses:
+        '200':
+          description: CSV datoteka
+          headers:
+            Content-Disposition:
+              schema: { type: string, example: 'attachment; filename="dolasci_2026-10-01_2026-11-01.csv"' }
+          content:
+            text/csv:
+              schema: { type: string }
+              example: "﻿Prezime;Ime;E-mail;Pojas;Dolasci ukupno;Dolasci u mjesecu;Zadnjih 7 dana;Zadnjih 30 dana;Prijave bez dolaska;Postotak nedolazaka;Zadnji dolazak\r\nHorvat;Ana;ana@example.com;BLUE;8;8;2;8;1;11,1;29.10.2026.\r\n"
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /reports/inactive-members:
+    get:
+      tags: [Reports]
+      operationId: listInactiveMembers
+      summary: Aktivni članovi koji dugo nisu dolazili
+      x-roles: [TRAINER, ADMIN]
+      parameters:
+        - name: days
+          in: query
+          description: Bez `PRESENT` dolaska u zadnjih N dana (uključujući članove koji nikad nisu došli).
+          schema: { type: integer, minimum: 1, maximum: 365, default: 14 }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InactiveMemberPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: TAPIN_SESSION
+      description: Spring Security sesija (HttpOnly, Secure, SameSite=Lax).
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-XSRF-TOKEN
+      description: Vrijednost čitljivog cookieja `XSRF-TOKEN`; obvezno za POST/PUT/PATCH/DELETE.
+
+  parameters:
+    MembershipId:
+      name: membershipId
+      in: path
+      required: true
+      description: ID članstva u klubu (`club_memberships.id`), **ne** `userId`.
+      schema: { $ref: '#/components/schemas/MembershipId' }
+    TrainingId:
+      name: trainingId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/TrainingId' }
+    BeltPeriodId:
+      name: beltPeriodId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/BeltPeriodId' }
+    Page:
+      name: page
+      in: query
+      description: Broj stranice od 0.
+      schema: { type: integer, minimum: 0, default: 0 }
+    Size:
+      name: size
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    FromDate:
+      name: from
+      in: query
+      description: Lokalni datum treninga (Europe/Zagreb), uključivo.
+      schema: { type: string, format: date }
+    ToDate:
+      name: to
+      in: query
+      description: Lokalni datum treninga (Europe/Zagreb), isključivo.
+      schema: { type: string, format: date }
+    ReportFrom:
+      name: from
+      in: query
+      required: true
+      description: Lokalni datum (Europe/Zagreb), uključivo.
+      schema: { type: string, format: date }
+    ReportTo:
+      name: to
+      in: query
+      required: true
+      description: Lokalni datum (Europe/Zagreb), isključivo. Interval najviše 366 dana.
+      schema: { type: string, format: date }
+    ReportMembershipId:
+      name: membershipId
+      in: query
+      description: Filter na jednog polaznika.
+      schema: { $ref: '#/components/schemas/MembershipId' }
+    ReportBelt:
+      name: belt
+      in: query
+      description: Filter po trenutačnom pojasu.
+      schema: { $ref: '#/components/schemas/CurrentBelt' }
+
+  headers:
+    RetryAfter:
+      description: Broj sekundi do sljedećeg dopuštenog pokušaja.
+      schema: { type: integer, minimum: 1 }
+
+  responses:
+    BadRequest:
+      description: Neispravan zahtjev (validacija/oblik podataka)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ValidationProblem' }
+          example:
+            type: urn:tapin:error:validation-failed
+            title: Bad Request
+            status: 400
+            detail: Zahtjev sadrži neispravne podatke.
+            instance: /api/v1/members/invitations
+            errorCode: VALIDATION_FAILED
+            fieldErrors:
+              email: must be a well-formed email address
+    Unauthorized:
+      description: Nije prijavljen
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: urn:tapin:error:unauthenticated
+            title: Unauthorized
+            status: 401
+            detail: Potrebna je prijava.
+            instance: /api/v1/me
+            errorCode: UNAUTHENTICATED
+    InvalidCredentials:
+      description: Pogrešan e-mail ili lozinka (bez otkrivanja koje od toga)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: urn:tapin:error:invalid-credentials
+            title: Unauthorized
+            status: 401
+            detail: Neispravan e-mail ili lozinka.
+            instance: /api/v1/auth/login
+            errorCode: INVALID_CREDENTIALS
+    Forbidden:
+      description: Nedostaje ovlast, nedopuštena dodjela uloge ili neispravan CSRF token
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: urn:tapin:error:forbidden
+            title: Forbidden
+            status: 403
+            detail: Nemate ovlast za ovu radnju.
+            instance: /api/v1/members/42/statistics
+            errorCode: FORBIDDEN
+    NotFound:
+      description: Resurs ne postoji
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: urn:tapin:error:not-found
+            title: Not Found
+            status: 404
+            detail: Trening ne postoji.
+            instance: /api/v1/trainings/999
+            errorCode: NOT_FOUND
+    Conflict:
+      description: Sukob stanja (istodobna izmjena, duplikat, već evidentirana prisutnost, preklapanje termina)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ConflictProblem' }
+          example:
+            type: urn:tapin:error:attendance-already-recorded
+            title: Conflict
+            status: 409
+            detail: Prisutnost je već evidentirana; prijavu više ne možete otkazati.
+            instance: /api/v1/trainings/456/my-registration
+            errorCode: ATTENDANCE_ALREADY_RECORDED
+    AttendanceConflict:
+      description: Istodobna izmjena evidencije; `currentState` sadrži svježi redak rostera
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/AttendanceConflictProblem' }
+          example:
+            type: urn:tapin:error:version-conflict
+            title: Conflict
+            status: 409
+            detail: Zapis je u međuvremenu izmijenjen. Osvježite podatke i pokušajte ponovno.
+            instance: /api/v1/trainings/456/attendance/123
+            errorCode: VERSION_CONFLICT
+            currentState:
+              membershipId: 123
+              userId: 77
+              firstName: Ana
+              lastName: Horvat
+              currentBelt: BLUE
+              registrationStatus: REGISTERED
+              attendanceStatus: ABSENT
+              attendanceVersion: 3
+              attendanceUpdatedAt: '2026-10-20T16:31:40Z'
+              attendanceUpdatedByUserId: 6
+    UnprocessableContent:
+      description: Poslovno pravilo ne dopušta radnju
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: urn:tapin:error:membership-inactive
+            title: Unprocessable Content
+            status: 422
+            detail: Neaktivan član se ne može prijaviti na buduće treninge.
+            instance: /api/v1/trainings/456/my-registration
+            errorCode: MEMBERSHIP_INACTIVE
+    TooManyRequests:
+      description: Previše pokušaja
+      headers:
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: urn:tapin:error:rate-limited
+            title: Too Many Requests
+            status: 429
+            detail: Previše pokušaja. Pokušajte ponovno za nekoliko minuta.
+            instance: /api/v1/auth/login
+            errorCode: RATE_LIMITED
+
+  schemas:
+    # ---------------------------------------------------------------- identifiers & primitives
+    UserId:
+      type: integer
+      format: int64
+      minimum: 1
+      description: ID korisničkog računa (`users.id`) – osoba/prijava/autor izmjene.
+      examples: [77]
+    MembershipId:
+      type: integer
+      format: int64
+      minimum: 1
+      description: ID članstva u klubu (`club_memberships.id`) – sve članske radnje.
+      examples: [123]
+    TrainingId:
+      type: integer
+      format: int64
+      minimum: 1
+      examples: [456]
+    ScheduleId:
+      type: integer
+      format: int64
+      minimum: 1
+    BeltPeriodId:
+      type: integer
+      format: int64
+      minimum: 1
+    Version:
+      type: integer
+      format: int64
+      minimum: 0
+      description: Verzija za optimistično zaključavanje.
+    ExpectedVersion:
+      type: integer
+      format: int64
+      minimum: 0
+      description: Zadnja pročitana `version`; neusklađenost → `409 VERSION_CONFLICT`.
+    LocalTime:
+      type: string
+      pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+      description: Lokalno vrijeme u Europe/Zagreb, `HH:mm`.
+      examples: ['18:30']
+    Email:
+      type: string
+      format: email
+      maxLength: 320
+    Phone:
+      type: string
+      maxLength: 32
+      pattern: '^[+0-9 ()/-]{6,32}$'
+    Password:
+      type: string
+      format: password
+      minLength: 10
+      maxLength: 128
+      writeOnly: true
+
+    # ---------------------------------------------------------------- enums
+    Role:
+      type: string
+      enum: [MEMBER, TRAINER, ADMIN]
+    AccountStatus:
+      type: string
+      enum: [INVITED, ACTIVE, DISABLED]
+      description: Stanje računa (aktivacija pozivnice); nije isto što i status članstva.
+    MembershipStatus:
+      type: string
+      enum: [ACTIVE, INACTIVE]
+    Belt:
+      type: string
+      enum: [WHITE, BLUE, PURPLE, BROWN, BLACK]
+      description: Pojas (bez crtica). Redoslijed je rastući.
+    CurrentBelt:
+      type: string
+      enum: [WHITE, BLUE, PURPLE, BROWN, BLACK, UNKNOWN]
+      description: Izvedeno iz povijesti; `UNKNOWN` dok početni pojas nije unesen.
+    PromotionTiming:
+      type: string
+      enum: [AFTER_TRAINING, BEFORE_TRAINING]
+      description: |
+        `AFTER_TRAINING` (zadano): treninzi na dan dodjele pripadaju prethodnom pojasu, `effectiveFromDate = awardedOn + 1 dan`.
+        `BEFORE_TRAINING`: `effectiveFromDate = awardedOn`.
+    TrainingStatus:
+      type: string
+      enum: [SCHEDULED, CANCELLED, HELD]
+    RegistrationStatus:
+      type: string
+      enum: [REGISTERED, CANCELLED]
+    MyRegistrationStatus:
+      type: string
+      enum: [REGISTERED, CANCELLED, NONE]
+      description: '`NONE` – nikad se nije prijavio na taj termin.'
+    AttendanceStatus:
+      type: string
+      enum: [PRESENT, ABSENT, UNMARKED]
+      description: '`UNMARKED` = ne postoji zapis prisutnosti (još nije odlučeno).'
+    AttendanceMarkStatus:
+      type: string
+      enum: [PRESENT, ABSENT]
+      description: Statusi koje trener može upisati; `UNMARKED` se postiže DELETE-om.
+    AttendanceSource:
+      type: string
+      enum: [SINGLE, BULK, HISTORICAL_IMPORT, CORRECTION]
+    NotificationStatus:
+      type: string
+      enum: [QUEUED, NOT_REQUIRED]
+      description: |
+        `QUEUED` – obavijest je upisana u outbox u istoj transakciji; slanje je asinkrono i **nije potvrda dostave**.
+        `NOT_REQUIRED` – stanje se nije stvarno promijenilo (idempotentan ponovljeni zahtjev), obavijest se ne šalje.
+    ErrorCode:
+      type: string
+      description: Stabilan strojno čitljiv kod pogreške. Sinkroniziran s `com.tapin.shared.error.ErrorCode`.
+      enum:
+        - VALIDATION_FAILED
+        - MALFORMED_REQUEST
+        - UNAUTHENTICATED
+        - INVALID_CREDENTIALS
+        - FORBIDDEN
+        - CSRF_TOKEN_INVALID
+        - ROLE_ASSIGNMENT_FORBIDDEN
+        - NOT_FOUND
+        - METHOD_NOT_ALLOWED
+        - CONFLICT
+        - VERSION_CONFLICT
+        - DUPLICATE_RESOURCE
+        - ATTENDANCE_ALREADY_RECORDED
+        - TRAINING_OVERLAP
+        - BELT_DUPLICATE_EFFECTIVE_DATE
+        - BUSINESS_RULE_VIOLATION
+        - MEMBERSHIP_INACTIVE
+        - TRAINING_CANCELLED
+        - LAST_ADMIN_REMOVAL
+        - BELT_CHRONOLOGY_INVALID
+        - INVITATION_INVALID_OR_EXPIRED
+        - PASSWORD_RESET_TOKEN_INVALID
+        - RATE_LIMITED
+        - INTERNAL_ERROR
+
+    # ---------------------------------------------------------------- problems
+    Problem:
+      type: object
+      description: RFC 9457 problem details (`application/problem+json`).
+      required: [type, title, status, detail, instance, errorCode]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: '`urn:tapin:error:<errorCode u kebab-case>`'
+          examples: ['urn:tapin:error:version-conflict']
+        title:
+          type: string
+          description: Kratki HTTP naziv statusa.
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+          description: Poruka za korisnika na hrvatskom.
+        instance:
+          type: string
+          format: uri-reference
+          description: Putanja zahtjeva.
+        errorCode: { $ref: '#/components/schemas/ErrorCode' }
+    ValidationProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          properties:
+            fieldErrors:
+              type: object
+              description: Poruka po polju (ključ je putanja polja).
+              additionalProperties: { type: string }
+    ConflictProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          properties:
+            currentState:
+              description: Trenutačno stanje resursa kad je uzrok `VERSION_CONFLICT` (oblik ovisi o resursu).
+              type: object
+    AttendanceConflictProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required: [currentState]
+          properties:
+            currentState: { $ref: '#/components/schemas/RosterEntry' }
+
+    # ---------------------------------------------------------------- pagination
+    PageMetadata:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page: { type: integer, minimum: 0 }
+        size: { type: integer, minimum: 1, maximum: 100 }
+        totalElements: { type: integer, format: int64, minimum: 0 }
+        totalPages: { type: integer, minimum: 0 }
+
+    # ---------------------------------------------------------------- system
+    SystemInfo:
+      type: object
+      required: [application, version, clubName, timeZone, serverTime]
+      properties:
+        application: { type: string, examples: [TapIn] }
+        version: { type: string }
+        clubName: { type: string }
+        timeZone: { type: string, examples: [Europe/Zagreb] }
+        serverTime: { type: string, format: date-time }
+
+    # ---------------------------------------------------------------- auth
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { $ref: '#/components/schemas/Email' }
+        password: { type: string, format: password, writeOnly: true, maxLength: 128 }
+    InvitationTokenRequest:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string, minLength: 32, maxLength: 256, writeOnly: true }
+    InvitationPreview:
+      type: object
+      required: [email, firstName, lastName, clubName, expiresAt]
+      properties:
+        email: { $ref: '#/components/schemas/Email' }
+        firstName: { type: string }
+        lastName: { type: string }
+        clubName: { type: string }
+        expiresAt: { type: string, format: date-time }
+    AcceptInvitationRequest:
+      type: object
+      required: [token, password, firstName, lastName]
+      properties:
+        token: { type: string, minLength: 32, maxLength: 256, writeOnly: true }
+        password: { $ref: '#/components/schemas/Password' }
+        firstName: { type: string, minLength: 1, maxLength: 100 }
+        lastName: { type: string, minLength: 1, maxLength: 100 }
+        phone: { oneOf: [{ $ref: '#/components/schemas/Phone' }, { type: 'null' }] }
+    PasswordResetRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { $ref: '#/components/schemas/Email' }
+    PasswordResetConfirmRequest:
+      type: object
+      required: [token, newPassword]
+      properties:
+        token: { type: string, minLength: 32, maxLength: 256, writeOnly: true }
+        newPassword: { $ref: '#/components/schemas/Password' }
+    CurrentUser:
+      type: object
+      required: [userId, membershipId, email, firstName, lastName, phone, accountStatus, membershipStatus, roles, joinedOn, club, version]
+      properties:
+        userId: { $ref: '#/components/schemas/UserId' }
+        membershipId: { $ref: '#/components/schemas/MembershipId' }
+        email: { $ref: '#/components/schemas/Email' }
+        firstName: { type: string }
+        lastName: { type: string }
+        phone: { oneOf: [{ $ref: '#/components/schemas/Phone' }, { type: 'null' }] }
+        accountStatus: { $ref: '#/components/schemas/AccountStatus' }
+        membershipStatus: { $ref: '#/components/schemas/MembershipStatus' }
+        roles:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/Role' }
+        joinedOn: { type: string, format: date }
+        club:
+          type: object
+          required: [name, timeZone]
+          properties:
+            name: { type: string }
+            timeZone: { type: string, examples: [Europe/Zagreb] }
+        version:
+          $ref: '#/components/schemas/Version'
+          description: Verzija korisničkog profila (za `PATCH /me/profile`).
+    UpdateOwnProfileRequest:
+      type: object
+      required: [expectedVersion, phone]
+      properties:
+        expectedVersion: { $ref: '#/components/schemas/ExpectedVersion' }
+        phone: { oneOf: [{ $ref: '#/components/schemas/Phone' }, { type: 'null' }] }
+
+    # ---------------------------------------------------------------- members
+    MemberSummary:
+      type: object
+      required: [membershipId, userId, firstName, lastName, email, roles, accountStatus, membershipStatus, joinedOn, currentBelt, lastPresentOn]
+      properties:
+        membershipId: { $ref: '#/components/schemas/MembershipId' }
+        userId: { $ref: '#/components/schemas/UserId' }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { $ref: '#/components/schemas/Email' }
+        roles:
+          type: array
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/Role' }
+        accountStatus: { $ref: '#/components/schemas/AccountStatus' }
+        membershipStatus: { $ref: '#/components/schemas/MembershipStatus' }
+        joinedOn: { type: string, format: date }
+        currentBelt: { $ref: '#/components/schemas/CurrentBelt' }
+        lastPresentOn:
+          type: [string, 'null']
+          format: date
+          description: Lokalni datum zadnjeg `PRESENT` dolaska.
+    MemberSummaryPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/MemberSummary' }
+        page: { $ref: '#/components/schemas/PageMetadata' }
+    MemberDetail:
+      allOf:
+        - $ref: '#/components/schemas/MemberSummary'
+        - type: object
+          required: [phone, currentBeltAwardedOn, createdAt, updatedAt, version]
+          properties:
+            phone:
+              oneOf: [{ $ref: '#/components/schemas/Phone' }, { type: 'null' }]
+              description: Vidljivo samo TRAINER/ADMIN (zaštićeni podatak, §14).
+            currentBeltAwardedOn:
+              type: [string, 'null']
+              format: date
+              description: '`null` = "datum nije evidentiran".'
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+            version:
+              $ref: '#/components/schemas/Version'
+              description: Verzija članstva (za `PATCH /members/{membershipId}` i `PUT .../roles`).
+    InviteMemberRequest:
+      type: object
+      required: [email, firstName, lastName, roles]
+      properties:
+        email: { $ref: '#/components/schemas/Email' }
+        firstName: { type: string, minLength: 1, maxLength: 100 }
+        lastName: { type: string, minLength: 1, maxLength: 100 }
+        roles:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/Role' }
+          description: TRAINER smije poslati samo `[MEMBER]`.
+        joinedOn:
+          type: string
+          format: date
+          description: Zadano današnji datum (Europe/Zagreb); može biti u prošlosti za stare članove.
+    InvitationResult:
+      type: object
+      required: [invitationId, userId, membershipId, email, expiresAt, notificationStatus]
+      properties:
+        invitationId: { type: integer, format: int64 }
+        userId: { $ref: '#/components/schemas/UserId' }
+        membershipId: { $ref: '#/components/schemas/MembershipId' }
+        email: { $ref: '#/components/schemas/Email' }
+        expiresAt: { type: string, format: date-time }
+        notificationStatus: { $ref: '#/components/schemas/NotificationStatus' }
+    UpdateMemberRequest:
+      type: object
+      required: [expectedVersion]
+      minProperties: 2
+      description: Šalju se samo polja koja se mijenjaju.
+      properties:
+        expectedVersion: { $ref: '#/components/schemas/ExpectedVersion' }
+        firstName: { type: string, minLength: 1, maxLength: 100 }
+        lastName: { type: string, minLength: 1, maxLength: 100 }
+        phone: { oneOf: [{ $ref: '#/components/schemas/Phone' }, { type: 'null' }] }
+        joinedOn: { type: string, format: date }
+        membershipStatus: { $ref: '#/components/schemas/MembershipStatus' }
+    ReplaceRolesRequest:
+      type: object
+      required: [expectedVersion, roles]
+      properties:
+        expectedVersion: { $ref: '#/components/schemas/ExpectedVersion' }
+        roles:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/Role' }
+
+    # ---------------------------------------------------------------- belts
+    BeltPeriod:
+      type: object
+      required: [beltPeriodId, belt, awardedOn, effectiveFromDate, effectiveToDate, trainingsCount, awardedByUserId, note, createdByUserId, createdAt, updatedAt, version]
+      properties:
+        beltPeriodId: { $ref: '#/components/schemas/BeltPeriodId' }
+        belt: { $ref: '#/components/schemas/Belt' }
+        awardedOn:
+          type: [string, 'null']
+          format: date
+          description: Stvarni datum dodjele; `null` = "datum nije evidentiran" (ne izmišlja se).
+        effectiveFromDate:
+          type: string
+          format: date
+          description: Od ovog lokalnog datuma (uključivo) treninzi se pripisuju pojasu.
+        effectiveToDate:
+          type: [string, 'null']
+          format: date
+          description: '`effectiveFromDate` sljedećeg razdoblja (isključivo); `null` za trenutačni pojas.'
+        trainingsCount:
+          type: integer
+          minimum: 0
+          description: '`PRESENT` dolasci na `HELD` treninzima unutar razdoblja (izračunato, ne pohranjeno).'
+        awardedByUserId:
+          oneOf: [{ $ref: '#/components/schemas/UserId' }, { type: 'null' }]
+        note: { type: [string, 'null'], maxLength: 500 }
+        createdByUserId: { $ref: '#/components/schemas/UserId' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        version: { $ref: '#/components/schemas/Version' }
+    BeltHistory:
+      type: object
+      description: Vrijedi `sum(periods.trainingsCount) + unassignedTrainings = totalTrainings`.
+      required: [membershipId, currentBelt, currentBeltAwardedOn, currentBeltTrainings, totalTrainings, unassignedTrainings, periods]
+      properties:
+        membershipId: { $ref: '#/components/schemas/MembershipId' }
+        currentBelt: { $ref: '#/components/schemas/CurrentBelt' }
+        currentBeltAwardedOn: { type: [string, 'null'], format: date }
+        currentBeltTrainings: { type: integer, minimum: 0 }
+        totalTrainings: { type: integer, minimum: 0 }
+        unassignedTrainings:
+          type: integer
+          minimum: 0
+          description: Dolasci prije prvog poznatog razdoblja ("neraspoređeni po pojasu").
+        periods:
+          type: array
+          description: Kronološki, najstariji prvi.
+          items: { $ref: '#/components/schemas/BeltPeriod' }
+    CreateBeltPeriodRequest:
+      type: object
+      required: [belt]
+      properties:
+        belt: { $ref: '#/components/schemas/Belt' }
+        awardedOn: { type: [string, 'null'], format: date }
+        promotionTiming:
+          $ref: '#/components/schemas/PromotionTiming'
+          default: AFTER_TRAINING
+        effectiveFromDate:
+          type: string
+          format: date
+          description: Obvezno ako je `awardedOn` null; inače se ignorira (izračunava se).
+        awardedByUserId:
+          oneOf: [{ $ref: '#/components/schemas/UserId' }, { type: 'null' }]
+        note: { type: [string, 'null'], maxLength: 500 }
+    CorrectBeltPeriodRequest:
+      type: object
+      required: [expectedVersion, reason]
+      properties:
+        expectedVersion: { $ref: '#/components/schemas/ExpectedVersion' }
+        belt: { $ref: '#/components/schemas/Belt' }
+        awardedOn: { type: [string, 'null'], format: date }
+        promotionTiming: { $ref: '#/components/schemas/PromotionTiming' }
+        effectiveFromDate: { type: string, format: date }
+        awardedByUserId:
+          oneOf: [{ $ref: '#/components/schemas/UserId' }, { type: 'null' }]
+        note: { type: [string, 'null'], maxLength: 500 }
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Razlog ispravka (zapisuje se u audit).
+    BeltPeriodMutationResult:
+      type: object
+      required: [beltPeriod, history]
+      properties:
+        beltPeriod: { $ref: '#/components/schemas/BeltPeriod' }
+        history: { $ref: '#/components/schemas/BeltHistory' }
+    BeltAuditEntry:
+      type: object
+      required: [auditId, beltPeriodId, membershipId, actorUserId, action, oldValues, newValues, reason, occurredAt]
+      properties:
+        auditId: { type: integer, format: int64 }
+        beltPeriodId: { $ref: '#/components/schemas/BeltPeriodId' }
+        membershipId: { $ref: '#/components/schemas/MembershipId' }
+        actorUserId: { $ref: '#/components/schemas/UserId' }
+        action: { type: string, enum: [CREATED, CORRECTED] }
+        oldValues:
+          type: [object, 'null']
+          additionalProperties: true
+          description: Snimka polja prije izmjene (`belt`, `awardedOn`, `effectiveFromDate`, `note`, ...).
+        newValues:
+          type: object
+          additionalProperties: true
+        reason: { type: [string, 'null'] }
+        occurredAt: { type: string, format: date-time }
+    BeltAuditPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/BeltAuditEntry' }
+        page: { $ref: '#/components/schemas/PageMetadata' }
+
+    # ---------------------------------------------------------------- trainings
+    CoachRef:
+      type: object
+      required: [membershipId, userId, firstName, lastName]
+      properties:
+        membershipId: { $ref: '#/components/schemas/MembershipId' }
+        userId: { $ref: '#/components/schemas/UserId' }
+        firstName: { type: string }
+        lastName: { type: string }
+    TrainingSummary:
+      type: object
+      required: [trainingId, scheduleId, occurrenceDate, title, startAt, endAt, localDate, status, coaches, myRegistrationStatus, myAttendanceStatus, canRegister, canCancelRegistration, version]
+      properties:
+        trainingId: { $ref: '#/components/schemas/TrainingId' }
+        scheduleId:
+          oneOf: [{ $ref: '#/components/schemas/ScheduleId' }, { type: 'null' }]
+          description: '`null` za izvanredni/ručni termin.'
+        occurrenceDate:
+          type: [string, 'null']
+          format: date
+          description: Originalni datum iz pravila (ne mijenja se pomicanjem termina).
+        title: { type: [string, 'null'], maxLength: 150 }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        localDate:
+          type: string
+          format: date
+          description: Lokalni datum početka u Europe/Zagreb (osnova za statistiku i pojaseve).
+        status: { $ref: '#/components/schemas/TrainingStatus' }
+        coaches:
+          type: array
+          items: { $ref: '#/components/schemas/CoachRef' }
+        registeredCount:
+          type: integer
+          minimum: 0
+          description: Broj aktivnih prijava; prisutno samo za TRAINER/ADMIN (članovi ne vide tuđe prijave, §2.2).
+        myRegistrationStatus: { $ref: '#/components/schemas/MyRegistrationStatus' }
+        myAttendanceStatus: { $ref: '#/components/schemas/AttendanceStatus' }
+        canRegister:
+          type: boolean
+          description: Izračunato na poslužitelju (aktivno članstvo, termin nije otkazan, prisutnost nije evidentirana).
+        canCancelRegistration: { type: boolean }
+        version: { $ref: '#/components/schemas/Version' }
+    TrainingList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/TrainingSummary' }
+    TrainingDetail:
+      allOf:
+        - $ref: '#/components/schemas/TrainingSummary'
+        - type: object
+          required: [cancellationReason, createdByUserId, createdAt, updatedAt]
+          properties:
+            cancellationReason: { type: [string, 'null'] }
+            note: { type: [string, 'null'], maxLength: 500 }
+            createdByUserId:
+              oneOf: [{ $ref: '#/components/schemas/UserId' }, { type: 'null' }]
+              description: '`null` za termine materijalizirane iz pravila.'
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    TrainingMutationResult:
+      type: object
+      required: [training, changed, notificationStatus]
+      properties:
+        training: { $ref: '#/components/schemas/TrainingDetail' }
+        changed: { type: boolean }
+        notificationStatus: { $ref: '#/components/schemas/NotificationStatus' }
+    CreateTrainingRequest:
+      type: object
+      required: [startAt, endAt]
+      properties:
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time, description: Mora biti nakon `startAt`. }
+        title: { type: [string, 'null'], maxLength: 150 }
+        coachMembershipIds:
+          type: array
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/MembershipId' }
+        historical:
+          type: boolean
+          default: false
+          description: Termin u prošlosti, odmah `HELD`, za povijesni unos dolazaka.
+        note: { type: [string, 'null'], maxLength: 500 }
+    UpdateTrainingRequest:
+      type: object
+      required: [expectedVersion]
+      minProperties: 2
+      properties:
+        expectedVersion: { $ref: '#/components/schemas/ExpectedVersion' }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        title: { type: [string, 'null'], maxLength: 150 }
+        coachMembershipIds:
+          type: array
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/MembershipId' }
+        note: { type: [string, 'null'], maxLength: 500 }
+    CancelTrainingRequest:
+      type: object
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { $ref: '#/components/schemas/ExpectedVersion' }
+        reason: { type: [string, 'null'], maxLength: 500 }
+    Weekday:
+      type: string
+      enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]
+    RecurringSchedule:
+      type: object
+      required: [scheduleId, weekday, startTime, endTime, validFrom, validTo, enabled, version]
+      properties:
+        scheduleId: { $ref: '#/components/schemas/ScheduleId' }
+        weekday: { $ref: '#/components/schemas/Weekday' }
+        startTime: { $ref: '#/components/schemas/LocalTime' }
+        endTime: { $ref: '#/components/schemas/LocalTime' }
+        validFrom: { type: string, format: date }
+        validTo: { type: [string, 'null'], format: date, description: Uključivo; `null` = bez kraja. }
+        enabled: { type: boolean }
+        version: { $ref: '#/components/schemas/Version' }
+    RecurringScheduleList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/RecurringSchedule' }
+    CreateRecurringScheduleRequest:
+      type: object
+      required: [weekday, startTime, endTime, validFrom]
+      properties:
+        weekday: { $ref: '#/components/schemas/Weekday' }
+        startTime: { $ref: '#/components/schemas/LocalTime' }
+        endTime: { $ref: '#/components/schemas/LocalTime' }
+        validFrom: { type: string, format: date }
+        validTo: { type: [string, 'null'], format: date }
+        enabled: { type: boolean, default: true }
+    UpdateRecurringScheduleRequest:
+      type: object
+      required: [expectedVersion]
+      minProperties: 2
+      properties:
+        expectedVersion: { $ref: '#/components/schemas/ExpectedVersion' }
+        startTime: { $ref: '#/components/schemas/LocalTime' }
+        endTime: { $ref: '#/components/schemas/LocalTime' }
+        validTo: { type: [string, 'null'], format: date }
+        enabled: { type: boolean }
+
+    # ---------------------------------------------------------------- registrations
+    MyRegistrationResult:
+      type: object
+      required: [trainingId, membershipId, registrationStatus, attendanceStatus, registeredAt, cancelledAt, changed, notificationStatus]
+      properties:
+        trainingId: { $ref: '#/components/schemas/TrainingId' }
+        membershipId: { $ref: '#/components/schemas/MembershipId' }
+        registrationStatus: { $ref: '#/components/schemas/RegistrationStatus' }
+        attendanceStatus: { $ref: '#/components/schemas/AttendanceStatus' }
+        registeredAt: { type: string, format: date-time }
+        cancelledAt: { type: [string, 'null'], format: date-time }
+        changed: { type: boolean }
+        notificationStatus: { $ref: '#/components/schemas/NotificationStatus' }
+
+    # ---------------------------------------------------------------- attendance
+    RosterEntry:
+      type: object
+      required: [membershipId, userId, firstName, lastName, currentBelt, registrationStatus, attendanceStatus, attendanceVersion, attendanceUpdatedAt, attendanceUpdatedByUserId]
+      properties:
+        membershipId: { $ref: '#/components/schemas/MembershipId' }
+        userId: { $ref: '#/components/schemas/UserId' }
+        firstName: { type: string }
+        lastName: { type: string }
+        currentBelt: { $ref: '#/components/schemas/CurrentBelt' }
+        registrationStatus:
+          oneOf: [{ $ref: '#/components/schemas/RegistrationStatus' }, { type: 'null' }]
+          description: '`null` – član nije bio prijavljen (walk-in).'
+        attendanceStatus: { $ref: '#/components/schemas/AttendanceStatus' }
+        attendanceVersion:
+          $ref: '#/components/schemas/Version'
+          description: Šalje se kao `expectedVersion` pri sljedećoj izmjeni (i za `UNMARKED`).
+        attendanceUpdatedAt: { type: [string, 'null'], format: date-time }
+        attendanceUpdatedByUserId:
+          oneOf: [{ $ref: '#/components/schemas/UserId' }, { type: 'null' }]
+    RosterCounts:
+      type: object
+      required: [registered, present, absent, unmarked]
+      properties:
+        registered: { type: integer, minimum: 0, description: Aktivne prijave (`REGISTERED`). }
+        present: { type: integer, minimum: 0 }
+        absent: { type: integer, minimum: 0 }
+        unmarked:
+          type: integer
+          minimum: 0
+          description: '`REGISTERED` + `UNMARKED` – broj koji obuhvaća "Označi sve preostale odsutnima".'
+    Roster:
+      type: object
+      required: [training, counts, entries]
+      properties:
+        training: { $ref: '#/components/schemas/TrainingSummary' }
+        counts: { $ref: '#/components/schemas/RosterCounts' }
+        entries:
+          type: array
+          items: { $ref: '#/components/schemas/RosterEntry' }
+    SetAttendanceRequest:
+      type: object
+      required: [status, expectedVersion]
+      properties:
+        status: { $ref: '#/components/schemas/AttendanceMarkStatus' }
+        expectedVersion: { $ref: '#/components/schemas/ExpectedVersion' }
+        note: { type: [string, 'null'], maxLength: 500 }
+        source:
+          type: string
+          enum: [SINGLE, CORRECTION, HISTORICAL_IMPORT]
+          default: SINGLE
+          description: Izvor za audit; `BULK` postavlja samo masovna radnja.
+    AttendanceResult:
+      type: object
+      required: [trainingId, membershipId, userId, status, version, changed, updatedAt, updatedByUserId, notificationStatus]
+      properties:
+        trainingId: { $ref: '#/components/schemas/TrainingId' }
+        membershipId: { $ref: '#/components/schemas/MembershipId' }
+        userId:
+          $ref: '#/components/schemas/UserId'
+          description: Račun člana (za prikaz); radnje se uvijek adresiraju s `membershipId`.
+        status: { $ref: '#/components/schemas/AttendanceStatus' }
+        version: { $ref: '#/components/schemas/Version' }
+        changed:
+          type: boolean
+          description: '`false` – identičan ponovljeni zahtjev; nema audita ni obavijesti.'
+        updatedAt: { type: [string, 'null'], format: date-time }
+        updatedByUserId:
+          oneOf: [{ $ref: '#/components/schemas/UserId' }, { type: 'null' }]
+          description: Trener/admin koji je zadnji mijenjao (`actor`).
+        notificationStatus: { $ref: '#/components/schemas/NotificationStatus' }
+    BulkAbsentRequest:
+      type: object
+      properties:
+        expectedMembershipIds:
+          type: array
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/MembershipId' }
+        note: { type: [string, 'null'], maxLength: 500 }
+    BulkAttendanceResult:
+      type: object
+      required: [trainingId, updatedCount, results]
+      properties:
+        trainingId: { $ref: '#/components/schemas/TrainingId' }
+        updatedCount: { type: integer, minimum: 0 }
+        results:
+          type: array
+          description: Samo stvarno promijenjeni članovi (svaki `notificationStatus=QUEUED`).
+          items: { $ref: '#/components/schemas/AttendanceResult' }
+    AttendanceAuditEntry:
+      type: object
+      required: [auditId, trainingId, membershipId, actorUserId, previousStatus, newStatus, source, note, occurredAt]
+      properties:
+        auditId: { type: integer, format: int64 }
+        trainingId: { $ref: '#/components/schemas/TrainingId' }
+        membershipId: { $ref: '#/components/schemas/MembershipId' }
+        actorUserId: { $ref: '#/components/schemas/UserId' }
+        previousStatus: { $ref: '#/components/schemas/AttendanceStatus' }
+        newStatus: { $ref: '#/components/schemas/AttendanceStatus' }
+        source: { $ref: '#/components/schemas/AttendanceSource' }
+        note: { type: [string, 'null'] }
+        occurredAt: { type: string, format: date-time }
+    AttendanceAuditPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AttendanceAuditEntry' }
+        page: { $ref: '#/components/schemas/PageMetadata' }
+
+    # ---------------------------------------------------------------- statistics
+    AttendanceRate:
+      type: object
+      description: Postotak s eksplicitnim nazivnikom (§9.1).
+      required: [numerator, denominator, rate, basis]
+      properties:
+        numerator: { type: integer, minimum: 0 }
+        denominator: { type: integer, minimum: 0 }
+        rate:
+          type: [number, 'null']
+          minimum: 0
+          maximum: 1
+          description: '`null` kad je nazivnik 0.'
+        basis:
+          type: string
+          enum: [HELD_SESSIONS_WHILE_ACTIVE, REGISTRATIONS]
+          description: |
+            `HELD_SESSIONS_WHILE_ACTIVE` – održani termini od datuma učlanjenja dok je članstvo bilo aktivno.
+            `REGISTRATIONS` – dolazak po prijavi.
+    BeltPeriodStats:
+      type: object
+      required: [beltPeriodId, belt, awardedOn, effectiveFromDate, effectiveToDate, trainingsCount]
+      properties:
+        beltPeriodId: { $ref: '#/components/schemas/BeltPeriodId' }
+        belt: { $ref: '#/components/schemas/Belt' }
+        awardedOn: { type: [string, 'null'], format: date }
+        effectiveFromDate: { type: string, format: date }
+        effectiveToDate: { type: [string, 'null'], format: date }
+        trainingsCount: { type: integer, minimum: 0 }
+    MemberStatistics:
+      type: object
+      required: [membershipId, userId, asOf, totalPresent, presentThisMonth, presentLast7Days, presentLast30Days, registeredButAbsent, attendanceRate, registrationAttendanceRate, currentBelt, currentBeltAwardedOn, currentBeltTrainings, unassignedTrainings, beltPeriods]
+      properties:
+        membershipId: { $ref: '#/components/schemas/MembershipId' }
+        userId: { $ref: '#/components/schemas/UserId' }
+        asOf: { type: string, format: date-time }
+        totalPresent: { type: integer, minimum: 0 }
+        presentThisMonth: { type: integer, minimum: 0, description: Tekući kalendarski mjesec u Europe/Zagreb. }
+        presentLast7Days: { type: integer, minimum: 0 }
+        presentLast30Days: { type: integer, minimum: 0 }
+        registeredButAbsent: { type: integer, minimum: 0, description: '`REGISTERED` + `ABSENT`.' }
+        attendanceRate: { $ref: '#/components/schemas/AttendanceRate' }
+        registrationAttendanceRate: { $ref: '#/components/schemas/AttendanceRate' }
+        currentBelt: { $ref: '#/components/schemas/CurrentBelt' }
+        currentBeltAwardedOn: { type: [string, 'null'], format: date }
+        currentBeltTrainings: { type: integer, minimum: 0 }
+        unassignedTrainings: { type: integer, minimum: 0 }
+        beltPeriods:
+          type: array
+          items: { $ref: '#/components/schemas/BeltPeriodStats' }
+    AttendanceHistoryEntry:
+      type: object
+      required: [trainingId, localDate, startAt, trainingStatus, registrationStatus, attendanceStatus]
+      properties:
+        trainingId: { $ref: '#/components/schemas/TrainingId' }
+        localDate: { type: string, format: date }
+        startAt: { type: string, format: date-time }
+        title: { type: [string, 'null'] }
+        trainingStatus: { $ref: '#/components/schemas/TrainingStatus' }
+        registrationStatus: { $ref: '#/components/schemas/MyRegistrationStatus' }
+        attendanceStatus: { $ref: '#/components/schemas/AttendanceStatus' }
+    AttendanceHistoryPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AttendanceHistoryEntry' }
+        page: { $ref: '#/components/schemas/PageMetadata' }
+
+    # ---------------------------------------------------------------- reports
+    MemberAttendanceRow:
+      type: object
+      required: [membershipId, userId, firstName, lastName, currentBelt, membershipStatus, presentCount, presentThisMonth, presentLast7Days, presentLast30Days, registeredButAbsent, noShowRate, lastPresentOn]
+      properties:
+        membershipId: { $ref: '#/components/schemas/MembershipId' }
+        userId: { $ref: '#/components/schemas/UserId' }
+        firstName: { type: string }
+        lastName: { type: string }
+        currentBelt: { $ref: '#/components/schemas/CurrentBelt' }
+        membershipStatus: { $ref: '#/components/schemas/MembershipStatus' }
+        presentCount: { type: integer, minimum: 0, description: '`PRESENT` u odabranom razdoblju.' }
+        presentThisMonth: { type: integer, minimum: 0 }
+        presentLast7Days: { type: integer, minimum: 0 }
+        presentLast30Days: { type: integer, minimum: 0 }
+        registeredButAbsent: { type: integer, minimum: 0 }
+        noShowRate:
+          type: [number, 'null']
+          minimum: 0
+          maximum: 1
+          description: '`REGISTERED+ABSENT` / sve evidentirane prijave u razdoblju.'
+        lastPresentOn: { type: [string, 'null'], format: date }
+        trainingsByBelt:
+          type: array
+          items: { $ref: '#/components/schemas/BeltPeriodStats' }
+    AttendanceReport:
+      type: object
+      required: [from, to, totals, items, page]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        totals:
+          type: object
+          required: [heldSessions, totalPresent, averagePresentPerSession, monthly]
+          properties:
+            heldSessions: { type: integer, minimum: 0 }
+            totalPresent: { type: integer, minimum: 0 }
+            averagePresentPerSession: { type: [number, 'null'], minimum: 0 }
+            monthly:
+              type: array
+              items:
+                type: object
+                required: [month, heldSessions, totalPresent, averagePresentPerSession]
+                properties:
+                  month: { type: string, pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$', examples: ['2026-10'] }
+                  heldSessions: { type: integer, minimum: 0 }
+                  totalPresent: { type: integer, minimum: 0 }
+                  averagePresentPerSession: { type: [number, 'null'], minimum: 0 }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/MemberAttendanceRow' }
+        page: { $ref: '#/components/schemas/PageMetadata' }
+    InactiveMember:
+      type: object
+      required: [membershipId, userId, firstName, lastName, currentBelt, lastPresentOn, daysSinceLastPresent]
+      properties:
+        membershipId: { $ref: '#/components/schemas/MembershipId' }
+        userId: { $ref: '#/components/schemas/UserId' }
+        firstName: { type: string }
+        lastName: { type: string }
+        currentBelt: { $ref: '#/components/schemas/CurrentBelt' }
+        lastPresentOn: { type: [string, 'null'], format: date }
+        daysSinceLastPresent:
+          type: [integer, 'null']
+          minimum: 0
+          description: '`null` ako član nikad nije došao.'
+    InactiveMemberPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/InactiveMember' }
+        page: { $ref: '#/components/schemas/PageMetadata' }

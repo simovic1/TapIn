@@ -1,0 +1,21 @@
+{
+  "name": "tapin-api-contract",
+  "private": true,
+  "version": "1.0.0",
+  "description": "OpenAPI contract for /api/v1 and its tooling (lint, mock server, TypeScript types)",
+  "engines": {
+    "node": ">=24.18.0"
+  },
+  "scripts": {
+    "lint": "redocly lint openapi.yaml",
+    "mock": "prism mock openapi.yaml --port 4010 --host 127.0.0.1",
+    "types": "openapi-typescript openapi.yaml -o ../frontend/src/lib/api/schema.d.ts",
+    "types:check": "openapi-typescript openapi.yaml -o .schema.check.d.ts && node scripts/compare.mjs ../frontend/src/lib/api/schema.d.ts .schema.check.d.ts"
+  },
+  "devDependencies": {
+    "@redocly/cli": "2.64.0",
+    "@stoplight/prism-cli": "5.16.0",
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,9 @@
+extends:
+  - recommended
+rules:
+  # Public endpoints intentionally declare `security: []`.
+  security-defined: error
+  operation-4xx-response: error
+  operation-operationId-unique: error
+  no-unused-components: warn
+  info-license-strict: error
