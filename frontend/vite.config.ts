@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig, loadEnv, type ProxyOptions } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -14,10 +15,7 @@ export default defineConfig(({ mode }) => {
 
   const proxy: Record<string, ProxyOptions> =
     mode === 'mock'
-      ? {
-          // Prism serves the contract paths without the `/api/v1` server prefix.
-          '/api/v1': { target: mockServer, rewrite: (path) => path.replace(/^\/api\/v1/, '') },
-        }
+      ? { '/api/v1': mockProxy(mockServer) }
       : Object.fromEntries(
           ['/api', '/actuator', '/v3/api-docs', '/swagger-ui'].map((path) => [path, { target: backend }]),
         );
@@ -29,5 +27,36 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       proxy,
     },
+    test: {
+      environment: 'jsdom',
+      setupFiles: ['./src/test/setup.ts'],
+      css: false,
+    },
   };
 });
+
+/**
+ * Prism serves contract paths without the `/api/v1` prefix and does not manage cookies. This proxy emulates the
+ * backend's cookies so the real session flow can be exercised against the mock:
+ * - every response sets a readable `XSRF-TOKEN` (the client echoes it in `X-XSRF-TOKEN`),
+ * - `POST /auth/login` (and invitation accept) sets `TAPIN_SESSION`, `POST /auth/logout` clears it.
+ */
+function mockProxy(target: string): ProxyOptions {
+  return {
+    target,
+    rewrite: (path) => path.replace(/^\/api\/v1/, ''),
+    configure: (proxy) => {
+      proxy.on('proxyRes', (proxyRes, req) => {
+        const url = req.url ?? '';
+        const cookies = ['XSRF-TOKEN=mock-csrf; Path=/; SameSite=Lax'];
+        if (proxyRes.statusCode === 200 && /\/auth\/(login|invitations\/accept)/.test(url)) {
+          cookies.push('TAPIN_SESSION=mock-session; Path=/; HttpOnly; SameSite=Lax');
+        }
+        if (url.includes('/auth/logout')) {
+          cookies.push('TAPIN_SESSION=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax');
+        }
+        proxyRes.headers['set-cookie'] = cookies;
+      });
+    },
+  };
+}

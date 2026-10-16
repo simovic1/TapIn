@@ -136,6 +136,10 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CurrentUser' }
+              examples:
+                trainerAndMember: { $ref: '#/components/examples/CurrentUserTrainerAndMember' }
+                member: { $ref: '#/components/examples/CurrentUserMember' }
+                admin: { $ref: '#/components/examples/CurrentUserAdmin' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/InvalidCredentials' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -203,6 +207,10 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CurrentUser' }
+              examples:
+                trainerAndMember: { $ref: '#/components/examples/CurrentUserTrainerAndMember' }
+                member: { $ref: '#/components/examples/CurrentUserMember' }
+                admin: { $ref: '#/components/examples/CurrentUserAdmin' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/UnprocessableContent' }
@@ -260,19 +268,10 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CurrentUser' }
-              example:
-                userId: 77
-                membershipId: 123
-                email: ana.horvat@example.com
-                firstName: Ana
-                lastName: Horvat
-                phone: '+385 91 123 4567'
-                accountStatus: ACTIVE
-                membershipStatus: ACTIVE
-                roles: [MEMBER, TRAINER]
-                joinedOn: '2024-03-01'
-                club: { name: BJJ klub, timeZone: Europe/Zagreb }
-                version: 4
+              examples:
+                trainerAndMember: { $ref: '#/components/examples/CurrentUserTrainerAndMember' }
+                member: { $ref: '#/components/examples/CurrentUserMember' }
+                admin: { $ref: '#/components/examples/CurrentUserAdmin' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
   /me/profile:
@@ -296,6 +295,10 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CurrentUser' }
+              examples:
+                trainerAndMember: { $ref: '#/components/examples/CurrentUserTrainerAndMember' }
+                member: { $ref: '#/components/examples/CurrentUserMember' }
+                admin: { $ref: '#/components/examples/CurrentUserAdmin' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1255,6 +1258,53 @@ components:
     RetryAfter:
       description: Broj sekundi do sljedećeg dopuštenog pokušaja.
       schema: { type: integer, minimum: 1 }
+
+  examples:
+    CurrentUserTrainerAndMember:
+      summary: Ana Horvat (MEMBER, TRAINER)
+      value:
+        userId: 77
+        membershipId: 123
+        email: ana.horvat@example.com
+        firstName: Ana
+        lastName: Horvat
+        phone: '+385 91 123 4567'
+        accountStatus: ACTIVE
+        membershipStatus: ACTIVE
+        roles: [MEMBER, TRAINER]
+        joinedOn: '2024-03-01'
+        club: { name: BJJ klub, timeZone: Europe/Zagreb }
+        version: 4
+    CurrentUserMember:
+      summary: Marko Marić (MEMBER)
+      value:
+        userId: 78
+        membershipId: 124
+        email: marko.maric@example.com
+        firstName: Marko
+        lastName: Marić
+        phone: '+385 91 123 4567'
+        accountStatus: ACTIVE
+        membershipStatus: ACTIVE
+        roles: [MEMBER]
+        joinedOn: '2024-03-01'
+        club: { name: BJJ klub, timeZone: Europe/Zagreb }
+        version: 4
+    CurrentUserAdmin:
+      summary: Iva Kovač (ADMIN, MEMBER)
+      value:
+        userId: 5
+        membershipId: 101
+        email: admin@example.com
+        firstName: Iva
+        lastName: Kovač
+        phone: '+385 91 123 4567'
+        accountStatus: ACTIVE
+        membershipStatus: ACTIVE
+        roles: [ADMIN, MEMBER]
+        joinedOn: '2024-03-01'
+        club: { name: BJJ klub, timeZone: Europe/Zagreb }
+        version: 4
 
   responses:
     BadRequest:

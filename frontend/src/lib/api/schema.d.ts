@@ -1854,28 +1854,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    /**
-                     * @example {
-                     *       "userId": 77,
-                     *       "membershipId": 123,
-                     *       "email": "ana.horvat@example.com",
-                     *       "firstName": "Ana",
-                     *       "lastName": "Horvat",
-                     *       "phone": "+385 91 123 4567",
-                     *       "accountStatus": "ACTIVE",
-                     *       "membershipStatus": "ACTIVE",
-                     *       "roles": [
-                     *         "MEMBER",
-                     *         "TRAINER"
-                     *       ],
-                     *       "joinedOn": "2024-03-01",
-                     *       "club": {
-                     *         "name": "BJJ klub",
-                     *         "timeZone": "Europe/Zagreb"
-                     *       },
-                     *       "version": 4
-                     *     }
-                     */
                     "application/json": components["schemas"]["CurrentUser"];
                 };
             };

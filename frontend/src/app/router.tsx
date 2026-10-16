@@ -1,6 +1,7 @@
-import { createBrowserRouter } from 'react-router';
+import { createBrowserRouter, type RouteObject } from 'react-router';
 import { AppLayout } from '../components/layout/AppLayout';
 import { AuthLayout } from '../components/layout/AuthLayout';
+import { RequireAuth } from '../lib/session/guards';
 import { HomePage } from '../pages/HomePage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { authRoutes } from '../features/auth/routes';
@@ -10,10 +11,15 @@ import { membersRoutes } from '../features/members/routes';
 import { beltsRoutes } from '../features/belts/routes';
 import { statisticsRoutes } from '../features/statistics/routes';
 
-export const router = createBrowserRouter([
+export const routes: RouteObject[] = [
   { element: <AuthLayout />, children: authRoutes },
   {
-    element: <AppLayout />,
+    // Everything else requires a session; role checks happen per route (RequireRole) and on the backend.
+    element: (
+      <RequireAuth>
+        <AppLayout />
+      </RequireAuth>
+    ),
     children: [
       { index: true, element: <HomePage /> },
       ...trainingsRoutes,
@@ -24,4 +30,6 @@ export const router = createBrowserRouter([
       { path: '*', element: <NotFoundPage /> },
     ],
   },
-]);
+];
+
+export const router = createBrowserRouter(routes);

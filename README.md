@@ -12,7 +12,7 @@ Stanje: **Faza 0 – temelj projekta** (skeleton, infrastruktura, konvencije, AP
 | Dio | Tehnologija (zaključane verzije) |
 |---|---|
 | Backend | Java 21, Spring Boot 4.1.1 (MVC, Security, Data JPA, Validation, Mail, Actuator), Flyway, springdoc-openapi 3.1.1, Maven 3.9.16 (wrapper) |
-| Frontend | React 19.3.1, TypeScript 6.0.3, Vite 8.3.4, React Router 7.18.4, TanStack Query 5.104.3, Tailwind CSS 4.3.3 |
+| Frontend | React 19.3.1, TypeScript 6.0.3, Vite 8.3.4, React Router 7.18.4, TanStack Query 5.104.3, Tailwind CSS 4.3.3; testovi Vitest 5.0.5 + Testing Library |
 | API ugovor | OpenAPI 3.1, Redocly CLI 2.64.0, Prism 5.16.0, openapi-typescript 7.13.0 (TypeScript 5.9.3) |
 | Baza | PostgreSQL 18.6 |
 | Lokalni e-mail | Mailpit 1.31.6 |
@@ -100,8 +100,8 @@ npm run dev
 ```
 
 Aplikacija: <http://localhost:5173>. Vite proxy prosljeđuje `/api`, `/actuator` i Swagger na backend (`:8080`),
-pa su SPA i API na istom originu – session i CSRF cookieji rade kao u produkciji. Početna stranica prikazuje
-„Stanje sustava” čim je backend dostupan.
+pa su SPA i API na istom originu – session i CSRF cookieji rade kao u produkciji. Bez prijave aplikacija vodi
+na `/prijava`. (Endpoint za prijavu stiže u Fazi 1 – do tada se cijeli tok isprobava protiv mocka, vidi dolje.)
 
 ### Frontend bez backenda (mock iz API ugovora)
 
@@ -143,7 +143,7 @@ Frontend (nginx + proxy na backend): <http://localhost:3000>.
 
 ```bash
 cd backend && ./mvnw verify           # unit + slice + integracijski (Testcontainers; preskače se bez Dockera)
-cd frontend && npm run build          # typecheck + produkcijski build
+cd frontend && npm test && npm run build   # Vitest + typecheck + produkcijski build
 sh scripts/check-migrations.sh        # naziv i redoslijed Flyway migracija
 cd api && npm run lint && npm run types:check   # API ugovor i generirani tipovi
 ```
@@ -155,6 +155,7 @@ CI (`.github/workflows/ci.yml`) pokreće sve provjere na svaki push i pull reque
 - [Moduli i vlasništvo](docs/architecture/modules.md) – odgovornosti, tablice, API i smjer ovisnosti po modulu
 - [Flyway migracije](docs/architecture/database-migrations.md) – imenovanje, dogovoreni redoslijed, SQL konvencije, bootstrap administratora
 - [API ugovor](docs/architecture/api-contract.md) – OpenAPI, mock, generirani tipovi, ključne odluke
+- [Frontend osnova](docs/architecture/frontend.md) – sesija i CSRF, navigacija po ulogama, komponente, pristupačnost
 - [Konvencije koda](docs/architecture/conventions.md) – imenovanje u backendu, API-ju, frontendu i gitu
 
 ## Licenca
