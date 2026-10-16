@@ -6,8 +6,8 @@ import java.util.Map;
 
 /**
  * SPI through which scheduling learns about registrations without depending on the registrations module (which
- * depends on scheduling). Implemented by registrations (BJJ-17/18); until then no implementation exists, so nobody
- * is notified, counts are 0 and every member's state is "not registered".
+ * depends on scheduling). Implemented by {@code registrations}; without an implementation nobody is notified,
+ * counts are 0 and every member's state is "not registered".
  */
 public interface TrainingParticipants {
 
@@ -28,12 +28,18 @@ public interface TrainingParticipants {
     }
 
     /**
+     * Facts only; scheduling derives {@code canRegister}/{@code canCancelRegistration} from them together with the
+     * session status and the membership status.
+     *
      * @param registrationStatus {@code REGISTERED}, {@code CANCELLED} or {@code NONE}
      * @param attendanceStatus   {@code PRESENT}, {@code ABSENT} or {@code UNMARKED}
      */
-    record MemberState(String registrationStatus, String attendanceStatus, boolean canRegister,
-                       boolean canCancelRegistration) {
+    record MemberState(String registrationStatus, String attendanceStatus) {
 
-        static final MemberState NONE = new MemberState("NONE", "UNMARKED", false, false);
+        public static final MemberState NONE = new MemberState("NONE", "UNMARKED");
+
+        boolean attendanceRecorded() {
+            return !"UNMARKED".equals(attendanceStatus);
+        }
     }
 }

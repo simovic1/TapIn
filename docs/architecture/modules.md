@@ -24,7 +24,10 @@ u CODEOWNERS-u i u ovoj tablici.
 
 1. **Samo vlasnik piše u svoje tablice.** Drugi moduli čitaju/mijenjaju podatke isključivo kroz javni servis
    vlasnika (npr. `registrations` ne upisuje u `training_attendances`, nego pita `attendance` za stanje).
-2. **`AttendanceService` je jedini autoritet** za upis prisutnosti i audit (§13.2).
+2. **`AttendanceService` je jedini autoritet** za upis prisutnosti i audit (§13.2). Prije svakog upisa uzima
+   `registrations.ParticipationLock` za (termin, član) – istu bravu drži i samostalna prijava/otkaz člana – pa se
+   otkaz prijave i evidencija istog člana nikad ne isprepliću (AC-05). `registrations` stanje prisutnosti čita kroz
+   SPI `AttendanceStatusLookup` koji implementira `attendance`.
 3. **`reporting` ne posjeduje tablice** – koristi read-only SQL upite i repeatable poglede (`R__reporting_*`).
    Brojači se ne pohranjuju kao poslovna istina (§9.3).
 4. **`notifications`**: ostali moduli upisuju događaj u outbox *u istoj transakciji* kao poslovnu promjenu, preko

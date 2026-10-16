@@ -88,6 +88,15 @@ public class TrainingService {
                                Long createdByUserId, Instant createdAt, Instant updatedAt) {
     }
 
+    /** What other modules need to know about a session; {@code displayTime} is formatted for e-mails. */
+    public record SessionRef(long trainingId, TrainingStatus status, Instant startAt, Instant endAt,
+                             String displayTime) {
+
+        public boolean hasEnded(Instant now) {
+            return status == TrainingStatus.HELD || !endAt.isAfter(now);
+        }
+    }
+
     public record MutationResult(TrainingView training, boolean changed, String notificationStatus) {
     }
 
@@ -127,6 +136,19 @@ public class TrainingService {
     @Transactional(readOnly = true)
     public TrainingView get(AuthenticatedUser viewer, long trainingId) {
         return views(viewer, List.of(find(trainingId))).getFirst();
+    }
+
+    /**
+     * Reads the session with a shared row lock for the caller's transaction (registrations). A concurrent cancel or
+     * move waits until the caller commits, and vice versa, so a registration can never slip in next to a
+     * cancellation without being seen by it (the cancel e-mail goes to everyone registered at its commit).
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public SessionRef lockForRegistration(long trainingId) {
+        TrainingSession s = sessions.findForShare(trainingId)
+                .orElseThrow(() -> ApiException.notFound("Trening ne postoji."));
+        return new SessionRef(s.getId(), s.getStatus(), s.getStartAt(), s.getEndAt(),
+                TrainingNotifier.format(s.getStartAt(), directory.theClub().timeZone()));
     }
 
     // ------------------------------------------------------------------ changes
@@ -329,9 +351,19 @@ public class TrainingService {
         List<Long> ids = list.stream().map(TrainingSession::getId).toList();
         boolean staff = viewer.hasRole("TRAINER") || viewer.hasRole("ADMIN");
         Map<Long, Integer> counts = staff ? registeredCounts(ids) : Map.of();
-        Map<Long, MemberState> mine = viewer.hasRole("MEMBER") ? memberStates(viewer.membershipId(), ids) : Map.of();
+        boolean member = viewer.hasRole("MEMBER");
+        Map<Long, MemberState> mine = member ? memberStates(viewer.membershipId(), ids) : Map.of();
+        MemberRef me = member ? directory.findAll(List.of(viewer.membershipId())).get(viewer.membershipId()) : null;
+        boolean activeMember = me != null && me.status() == MembershipStatus.ACTIVE;
+        Instant now = clock.instant();
         return list.stream().map(s -> {
             MemberState state = mine.getOrDefault(s.getId(), MemberState.NONE);
+            // Spec §5.1: register while the session is not cancelled and has not ended, until attendance is
+            // recorded; cancel the own registration any time until PRESENT/ABSENT is recorded.
+            boolean canRegister = activeMember && s.getStatus() == TrainingStatus.SCHEDULED
+                    && s.getEndAt().isAfter(now) && !state.attendanceRecorded()
+                    && !"REGISTERED".equals(state.registrationStatus());
+            boolean canCancel = member && "REGISTERED".equals(state.registrationStatus()) && !state.attendanceRecorded();
             List<CoachView> coachViews = s.getCoachMembershipIds().stream().map(coaches::get)
                     .filter(java.util.Objects::nonNull)
                     .sorted(java.util.Comparator.comparing(MemberRef::lastName).thenComparing(MemberRef::firstName))
@@ -339,8 +371,7 @@ public class TrainingService {
             return new TrainingView(s.getId(), s.getScheduleId(), s.getOccurrenceDate(), s.getTitle(), s.getStartAt(),
                     s.getEndAt(), LocalDate.ofInstant(s.getStartAt(), zone), s.getStatus(), coachViews,
                     staff ? counts.getOrDefault(s.getId(), 0) : null, state.registrationStatus(),
-                    state.attendanceStatus(), state.canRegister() && s.getStatus() != TrainingStatus.CANCELLED,
-                    state.canCancelRegistration(), s.getVersion(), s.getCancellationReason(), s.getNote(),
+                    state.attendanceStatus(), canRegister, canCancel, s.getVersion(), s.getCancellationReason(), s.getNote(),
                     s.getCreatedByUserId(), s.getCreatedAt(), s.getUpdatedAt());
         }).toList();
     }

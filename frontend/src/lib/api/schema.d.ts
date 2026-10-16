@@ -606,8 +606,10 @@ export interface paths {
         get?: never;
         /**
          * Prijava trenutnog člana na trening (idempotentno)
-         * @description Bez tijela zahtjeva. Već prijavljen → `200`, `changed=false`, `notificationStatus=NOT_REQUIRED` (AC-03).
-         *     Ponovna prijava nakon otkazivanja dopuštena je dok nema evidentirane prisutnosti.
+         * @description Bez tijela zahtjeva. Već prijavljen → `200`, `changed=false`, `notificationStatus=NOT_REQUIRED` (AC-03),
+         *     bez novog događaja i e-maila. Ponovna prijava nakon otkazivanja dopuštena je po istim pravilima, dok nema
+         *     evidentirane prisutnosti. Prijava je moguća i na trening u tijeku, ali ne nakon završetka
+         *     (`422 BUSINESS_RULE_VIOLATION`; dolazak tada evidentira trener).
          *     Neaktivno članstvo → `422 MEMBERSHIP_INACTIVE`; otkazan termin → `422 TRAINING_CANCELLED`;
          *     evidentirana prisutnost → `409 ATTENDANCE_ALREADY_RECORDED`.
          */
@@ -615,8 +617,9 @@ export interface paths {
         post?: never;
         /**
          * Otkazivanje vlastite prijave
-         * @description Dopušteno bilo kada dok za člana nema `PRESENT`/`ABSENT` (AC-04). Nakon evidencije →
-         *     `409 ATTENDANCE_ALREADY_RECORDED` (AC-05). Već otkazano → `200`, `changed=false`.
+         * @description Dopušteno bilo kada dok za člana nema `PRESENT`/`ABSENT`, i nakon početka termina (AC-04). Nakon evidencije →
+         *     `409 ATTENDANCE_ALREADY_RECORDED` (AC-05). Već otkazano → `200`, `changed=false`. Bez prijave → `404`.
+         *     Istodobna evidencija prisutnosti i otkaz istog člana serijaliziraju se: jedno od njih uvijek vidi drugo.
          */
         delete: operations["cancelMyRegistration"];
         options?: never;
