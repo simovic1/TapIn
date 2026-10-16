@@ -60,5 +60,6 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     });
   }
   if (response.status === 204) return undefined as T;
+  if (response.status === 202 && !response.headers.get('Content-Type')?.includes('json')) return undefined as T;
   return (await response.json()) as T;
 }

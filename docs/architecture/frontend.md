@@ -30,6 +30,15 @@ frontend/src/
   Pogrešna lozinka (`INVALID_CREDENTIALS`) se ne tretira kao istek.
 - Prijava/odjava čiste cijelu predmemoriju kako podaci prethodnog korisnika ne bi procurili.
 
+## Aktivacija i oporavak lozinke (BJJ-09)
+
+- `/pozivnica#token` prikazuje podatke pozivnice, provjerava lozinku i nakon aktivacije vodi na prijavljenu početnu stranicu.
+- `/zaboravljena-lozinka` šalje e-mail kroz zajednički API klijent i prikazuje istu potvrdu neovisno o postojanju računa.
+- `/nova-lozinka#token` šalje `token` i `newPassword`, provjerava duljinu i potvrdu lozinke te nakon uspjeha čisti
+  predmemoriju sesije i nudi novu prijavu. Token ostaje u fragmentu URL-a, izvan access logova.
+- Obrasci onemogućuju slanje dok zahtjev traje i prikazuju razumljive poruke za nevaljanu/isteklu poveznicu,
+  neispravnu lozinku, `429` i nedostupan poslužitelj. Prije slanja pribavlja se CSRF cookie preko `/me`.
+
 ## Navigacija i ovlasti
 
 - `app/navigation.ts` je jedini izvor stavki izbornika; svaka stavka ima `roles`. Korisnik s više uloga dobiva

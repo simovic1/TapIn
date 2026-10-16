@@ -27,6 +27,14 @@ public final class AuthenticatedUser implements UserDetails, CredentialsContaine
     private final String email;
     private final Set<String> roles;
     private String passwordHash;
+    private long credentialsVersion;
+
+    AuthenticatedUser credentialsVersion(long version) {
+        this.credentialsVersion = version;
+        return this;
+    }
+
+    long credentialsVersion() { return credentialsVersion; }
 
     AuthenticatedUser(long userId, long membershipId, String email, Set<String> roles, String passwordHash) {
         this.userId = userId;

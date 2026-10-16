@@ -104,6 +104,7 @@ function ActivationForm({
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
+    if (submitting) return;
     const errors: Record<string, string> = {};
     if ([...password].length < MIN_PASSWORD_LENGTH) errors.password = `Najmanje ${MIN_PASSWORD_LENGTH} znakova.`;
     else if (new TextEncoder().encode(password).length > MAX_PASSWORD_BYTES) errors.password = 'Lozinka je predugačka.';

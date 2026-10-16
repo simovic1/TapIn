@@ -1,6 +1,8 @@
 package com.tapin.members;
 
 import com.tapin.auth.AuthenticatedUser;
+import com.tapin.auth.AuthRequestLimiter;
+import jakarta.servlet.http.HttpServletRequest;
 import com.tapin.members.MemberInvitationService.InvitationResult;
 import com.tapin.members.MemberInvitationService.InviteCommand;
 import com.tapin.shared.api.ApiPaths;
@@ -31,9 +33,11 @@ import java.util.Set;
 class MemberInvitationController {
 
     private final MemberInvitationService service;
+    private final AuthRequestLimiter limiter;
 
-    MemberInvitationController(MemberInvitationService service) {
+    MemberInvitationController(MemberInvitationService service, AuthRequestLimiter limiter) {
         this.service = service;
+        this.limiter = limiter;
     }
 
     record InviteMemberRequest(
@@ -47,7 +51,8 @@ class MemberInvitationController {
     @Operation(summary = "Pozivanje novog člana")
     @PostMapping("/invitations")
     ResponseEntity<InvitationResult> invite(@AuthenticationPrincipal AuthenticatedUser actor,
-                                            @Valid @RequestBody InviteMemberRequest request) {
+                                            @Valid @RequestBody InviteMemberRequest request, HttpServletRequest http) {
+        limiter.acquire("invitation-send", http.getRemoteAddr(), "actor:" + actor.userId());
         InvitationResult result = service.invite(actor, new InviteCommand(request.email(), request.firstName(),
                 request.lastName(), request.roles(), request.joinedOn()));
         return ResponseEntity.created(URI.create(ApiPaths.V1 + "/members/" + result.membershipId())).body(result);
@@ -56,7 +61,8 @@ class MemberInvitationController {
     @Operation(summary = "Ponovno slanje pozivnice")
     @PostMapping("/{membershipId}/invitations/resend")
     ResponseEntity<InvitationResult> resend(@AuthenticationPrincipal AuthenticatedUser actor,
-                                            @PathVariable long membershipId) {
+                                            @PathVariable long membershipId, HttpServletRequest http) {
+        limiter.acquire("invitation-send", http.getRemoteAddr(), "actor:" + actor.userId());
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(service.resend(actor, membershipId));
     }
 }

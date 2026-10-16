@@ -55,6 +55,7 @@ class RefreshingSecurityContextRepository implements SecurityContextRepository {
             return context; // anonymous, or a test-provided authentication
         }
         return users.reload(principal.userId())
+                .filter(fresh -> fresh.credentialsVersion() == principal.credentialsVersion())
                 .map(fresh -> {
                     SecurityContext updated = SecurityContextHolder.createEmptyContext();
                     updated.setAuthentication(

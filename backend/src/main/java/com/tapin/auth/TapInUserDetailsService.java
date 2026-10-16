@@ -47,6 +47,6 @@ class TapInUserDetailsService implements UserDetailsService {
             return Optional.empty();
         }
         return Optional.of(new AuthenticatedUser(user.getId(), membership.get().membershipId(), user.getEmail(),
-                membership.get().roles(), user.getPasswordHash()));
+                membership.get().roles(), user.getPasswordHash()).credentialsVersion(user.getCredentialsVersion()));
     }
 }

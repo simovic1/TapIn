@@ -39,6 +39,26 @@ Modul `auth` (spec §2–3, §14). Konfiguracija: `com.tapin.auth.SecurityConfig
 - Status računa (`INVITED` → `ACTIVE`, `DISABLED`) i status članstva (`ACTIVE`/`INACTIVE`) su odvojeni: pozvani član
   ima aktivno članstvo, ali se ne može prijaviti dok ne aktivira račun.
 
+## Reset lozinke i ograničenja (BJJ-08)
+
+- `POST /auth/password-reset/request` s poljem `email` vraća prazan `202` za poznat, nepoznat,
+  pozvan ili onemogućen račun. Samo aktivan račun dobiva e-mail preko transactional outboxa.
+- Token ima 256 nasumičnih bita; tablica `password_reset_tokens` sadrži samo SHA-256 hash.
+  Vrijedi **30 minuta**. Novi zahtjev poništava prethodne tokene istog računa.
+- Poveznica je `/nova-lozinka#<token>`; fragment se ne šalje proxyju. Token i lozinka šalju se samo u
+  tijelu POST zahtjeva, ne logiraju se; tajni outbox payload briše se po završetku slanja.
+- `POST /auth/password-reset/confirm` prima `token` i `newPassword`. Potvrda je jednokratna i
+  transakcijska, uključujući istodobne zahtjeve. Istekao, iskorišten ili poništen token daje isti
+  `422 PASSWORD_RESET_TOKEN_INVALID`. Lozinka slijedi istu politiku kao aktivacija (10 znakova, 72 UTF-8 bajta).
+- Uspjeh vraća `204`, povećava `users.credentials_version` i poništava ostale reset tokene.
+  **Sve prethodne sesije gube pristup pri sljedećem zahtjevu**, na svim instancama koje koriste istu bazu.
+  Reset ne prijavljuje korisnika automatski; potrebna je nova prijava.
+- Za zahtjev i potvrdu reseta zasebno: najviše 5 pokušaja po cilju i 20 po IP-u u 15 minuta.
+  Cilj je normalizirani e-mail za zahtjev, hash tokena za potvrdu. I nepoznate adrese troše isti limit.
+  Izdavanje i ponovno slanje pozivnica dijele limit 5 po operateru i 20 po IP-u u 15 minuta.
+  Prekoračenje vraća `429 RATE_LIMITED` i `Retry-After`; CSRF ostaje obvezan na svim endpointima.
+  Limiteri su u memoriji za jednu MVP instancu; za više instanci potreban je zajednički store.
+
 ## Kolačići
 
 | Kolačić | HttpOnly | Secure | SameSite | Napomena |

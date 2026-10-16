@@ -48,6 +48,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(TestcontainersConfiguration.class)
 @Testcontainers(disabledWithoutDocker = true)
 class InvitationIntegrationTest {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean AuthRequestLimiter requestLimiter;
 
     private static final String NEW_PASSWORD = "nova-lozinka-123";
 

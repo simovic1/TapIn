@@ -33,6 +33,7 @@ export function LoginPage() {
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
+    if (login.isPending) return;
     login.mutate({ email: email.trim(), password }, { onSuccess: () => navigate(target, { replace: true }) });
   };
 

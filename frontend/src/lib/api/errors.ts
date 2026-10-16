@@ -12,6 +12,7 @@ const MESSAGES: Partial<Record<ErrorCode, string>> = {
     'Pozivnica nije valjana ili je istekla. Zatražite novu pozivnicu od trenera.',
   VERSION_CONFLICT: 'Podatak je u međuvremenu izmijenjen. Osvježite prikaz i pokušajte ponovno.',
   RATE_LIMITED: 'Previše pokušaja. Pričekajte nekoliko minuta i pokušajte ponovno.',
+  PASSWORD_RESET_TOKEN_INVALID: 'Poveznica nije valjana ili je istekla. Zatražite novu promjenu lozinke.',
   INTERNAL_ERROR: 'Došlo je do neočekivane pogreške na poslužitelju.',
 };
 

@@ -120,7 +120,7 @@ export interface paths {
         put?: never;
         /**
          * Zahtjev za reset lozinke
-         * @description Uvijek `202`, bez otkrivanja postoji li e-mail (§3.2). Ograničen broj pokušaja.
+         * @description Vraća prazan `202`, bez otkrivanja postoji li aktivan račun (§3.2). Token vrijedi 30 minuta; novi zahtjev poništava prethodni token. Najviše 5 zahtjeva po e-mail adresi i 20 po IP-u u 15 minuta, zatim `429` s `Retry-After`.
          */
         post: operations["requestPasswordReset"];
         delete?: never;
@@ -138,7 +138,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Potvrda reseta i nova lozinka */
+        /**
+         * Potvrda reseta i nova lozinka
+         * @description Jednokratni token šalje se iz fragmenta poveznice `/nova-lozinka#token` u tijelu zahtjeva. Uspjeh poništava sve stare sesije (pri sljedećem zahtjevu) i preostale reset tokene. Potrebna je nova prijava. Najviše 5 pokušaja po tokenu i 20 po IP-u u 15 minuta.
+         */
         post: operations["confirmPasswordReset"];
         delete?: never;
         options?: never;

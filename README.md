@@ -5,7 +5,7 @@ statistiku, povijest pojaseva i šalje e-mail obavijesti.
 
 Specifikacija: [`docs/bjj_evidencija_specifikacija_mvp_v1_1.md`](docs/bjj_evidencija_specifikacija_mvp_v1_1.md).
 Stanje: **Faza 0 – temelj projekta** (skeleton, infrastruktura, konvencije, API ugovor) i početak Faze 1
-(shema `users`/`clubs`/`club_memberships`/`membership_roles`, bootstrap administratora).
+(shema, bootstrap administratora, prijava/odjava, pozivnice i aktivacija te oporavak lozinke).
 
 ## Stack
 

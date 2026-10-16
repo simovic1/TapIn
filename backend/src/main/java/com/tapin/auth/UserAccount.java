@@ -52,6 +52,11 @@ class UserAccount {
     @Column(nullable = false)
     private long version;
 
+    @Column(name = "credentials_version", nullable = false)
+    private long credentialsVersion;
+
+    long getCredentialsVersion() { return credentialsVersion; }
+
     protected UserAccount() {
     }
 

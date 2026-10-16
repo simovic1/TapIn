@@ -26,7 +26,8 @@ sh scripts/check-migrations.sh
 
 Redoslijed slijedi ovisnosti tablica i backlog (§16). Brojevi su rezervirani; ako se plan promijeni, ažurira se
 ova tablica u istom PR-u. (Outbox je zbog BJJ-05 dobio V004, pa su planirane migracije V005–V009 pomaknute za
-jedan; komentar u `V001` ostaje izvorni jer se primijenjena migracija ne mijenja.)
+jedan; komentar u `V001` ostaje izvorni jer se primijenjena migracija ne mijenja.) BJJ-08 isporučuje reset
+lozinke kao V006; još neisporučene domenske migracije sada su rezervirane kao V007–V010.
 
 | Verzija | Datoteka | Modul | Sadržaj | Faza |
 |---|---|---|---|---|
@@ -35,11 +36,11 @@ jedan; komentar u `V001` ostaje izvorni jer se primijenjena migracija ne mijenja
 | V003 | `V003__members_clubs_memberships_roles.sql` | members | `clubs` (+ seed jednog kluba `Europe/Zagreb`, `uk_clubs_single_club`), `club_memberships` (`uk_club_memberships_club_user`), `membership_roles` (`pk_membership_roles`), `membership_status_events` | 1 ✅ |
 | V004 | `V004__notifications_email_outbox.sql` | notifications | `email_outbox` (outbox, deduplikacija, lease) – BJJ-05 | 5 ✅ |
 | V005 | `V005__auth_invitations.sql` | auth | `invitations` (hash tokena, jedna otvorena pozivnica po korisniku) – BJJ-07 | 1 ✅ |
-| V006 | `V006__scheduling_recurring_schedules_sessions.sql` | scheduling | `recurring_schedules` (+ seed uto/čet 18:30–20:00), `training_sessions`, `session_coaches`; FK `email_outbox.session_id` → `training_sessions` | 2 |
-| V007 | `V007__registrations_training_registrations.sql` | registrations | `training_registrations`, `registration_events` | 2 |
-| V008 | `V008__attendance_attendances_audit.sql` | attendance | `training_attendances`, `attendance_audit_logs` | 3 |
-| V009 | `V009__belts_belt_periods_audit.sql` | belts | `member_belt_periods`, `belt_period_audit_logs` | 4 |
-| V010 | `V010__auth_password_reset_tokens.sql` | auth | `password_reset_tokens` (odvojeno od pozivnica) | 1 |
+| V006 | `V006__auth_password_reset_tokens.sql` | auth | `password_reset_tokens` (odvojeno od pozivnica) | 1 ✅ |
+| V007 | `V007__scheduling_recurring_schedules_sessions.sql` | scheduling | `recurring_schedules` (+ seed uto/čet 18:30–20:00), `training_sessions`, `session_coaches`; FK `email_outbox.session_id` → `training_sessions` | 2 |
+| V008 | `V008__registrations_training_registrations.sql` | registrations | `training_registrations`, `registration_events` | 2 |
+| V009 | `V009__attendance_attendances_audit.sql` | attendance | `training_attendances`, `attendance_audit_logs` | 3 |
+| V010 | `V010__belts_belt_periods_audit.sql` | belts | `member_belt_periods`, `belt_period_audit_logs` | 4 |
 | R__ | `R__reporting_*.sql` | reporting | Read-only pogledi za statistiku | 6 |
 
 Admin seed (prvi administrator) **nije** u migraciji jer zahtijeva tajnu. Radi ga `AdminBootstrapService`
