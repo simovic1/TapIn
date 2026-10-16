@@ -17,3 +17,7 @@ tapin:
     name: Test klub
   mail:
     from: test@tapin.local
+  bootstrap:
+    admin:
+      # Tests call AdminBootstrapService explicitly.
+      enabled: false

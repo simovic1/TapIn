@@ -30,8 +30,8 @@ ova tablica u istom PR-u.
 | Verzija | Datoteka | Modul | Sadržaj | Faza |
 |---|---|---|---|---|
 | V001 | `V001__shared_baseline.sql` | shared | Baseline, bez tablica | 0 ✅ |
-| V002 | `V002__auth_users.sql` | auth | `users` (email `UNIQUE` case-insensitive, `account_status`) | 1 |
-| V003 | `V003__members_clubs_memberships_roles.sql` | members | `clubs` (+ seed kluba), `club_memberships`, `membership_roles`, `membership_status_events` | 1 |
+| V002 | `V002__auth_users.sql` | auth | `users` (email jedinstven bez obzira na velika/mala slova – `uk_users_email_lower`, `account_status`) | 1 ✅ |
+| V003 | `V003__members_clubs_memberships_roles.sql` | members | `clubs` (+ seed jednog kluba `Europe/Zagreb`, `uk_clubs_single_club`), `club_memberships` (`uk_club_memberships_club_user`), `membership_roles` (`pk_membership_roles`), `membership_status_events` | 1 ✅ |
 | V004 | `V004__auth_invitations_password_resets.sql` | auth | `invitations`, `password_reset_tokens` | 1 |
 | V005 | `V005__scheduling_recurring_schedules_sessions.sql` | scheduling | `recurring_schedules` (+ seed uto/čet 18:30–20:00), `training_sessions`, `session_coaches` | 2 |
 | V006 | `V006__registrations_training_registrations.sql` | registrations | `training_registrations`, `registration_events` | 2 |
@@ -40,8 +40,19 @@ ova tablica u istom PR-u.
 | V009 | `V009__notifications_email_outbox.sql` | notifications | `email_outbox` | 5 |
 | R__ | `R__reporting_*.sql` | reporting | Read-only pogledi za statistiku | 6 |
 
-Admin seed (prvi administrator) **nije** u migraciji jer zahtijeva tajnu (lozinku/e-mail) – radi se aplikacijskim
-seederom iz varijabli okruženja u Fazi 1.
+Admin seed (prvi administrator) **nije** u migraciji jer zahtijeva tajnu. Radi ga `AdminBootstrapService`
+(modul `members`) pri startu, iz `ADMIN_EMAIL`/`ADMIN_PASSWORD`:
+
+- radi samo dok ne postoji aktivni administrator – kasniji startovi ništa ne mijenjaju (ni lozinku);
+- postojećem korisniku s tim e-mailom (bez obzira na velika/mala slova) samo dodaje ulogu `ADMIN`;
+- za novi račun zahtijeva lozinku od najmanje 12 znakova, inače start pada; lozinka se nikad ne logira;
+- PostgreSQL advisory lock sprječava duplikate pri istodobnom startu više instanci;
+- zadana lozinka postoji **samo** u `application-local.yml` (lokalni razvoj); staging/prod je nemaju.
+
+## Vlasništvo domenskih migracija
+
+Migracije V004+ isporučuje vlasnik modula u zadatku koji uvodi te tablice, prema redoslijedu iz tablice gore.
+Ako zadatak treba tablicu iz kasnijeg broja prije ranijeg, dogovara se zamjena brojeva u tablici (isti PR).
 
 ## Pravila
 

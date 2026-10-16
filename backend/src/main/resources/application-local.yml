@@ -26,6 +26,11 @@ tapin:
     name: ${CLUB_NAME:BJJ klub (local)}
   mail:
     from: ${MAIL_FROM:no-reply@tapin.local}
+  bootstrap:
+    admin:
+      # LOCAL DEVELOPMENT ONLY - never used by staging/prod (they have no default; see application.yml).
+      email: ${ADMIN_EMAIL:admin@tapin.local}
+      password: ${ADMIN_PASSWORD:local-dev-admin-password}
 
 management:
   endpoint:

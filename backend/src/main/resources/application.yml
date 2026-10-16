@@ -55,6 +55,14 @@ tapin:
     time-zone: Europe/Zagreb
   mail:
     from: ${MAIL_FROM}
+  bootstrap:
+    admin:
+      # First administrator, created only while no active administrator exists. No default password anywhere
+      # except the local profile; remove ADMIN_PASSWORD from the environment after the first start.
+      email: ${ADMIN_EMAIL:}
+      password: ${ADMIN_PASSWORD:}
+      first-name: ${ADMIN_FIRST_NAME:Administrator}
+      last-name: ${ADMIN_LAST_NAME:TapIn}
 
 management:
   endpoints:
