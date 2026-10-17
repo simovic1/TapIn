@@ -8,7 +8,7 @@ services:
     dockerfilePath: ./Dockerfile.render
     dockerContext: .
     healthCheckPath: /actuator/health/readiness
-    autoDeployTrigger: off
+    autoDeployTrigger: "off"
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod,render

@@ -18,3 +18,5 @@ tapin:
     admin:
       email: ${ADMIN_EMAIL}
       password: ${ADMIN_PASSWORD:}
+      first-name: ${ADMIN_FIRST_NAME:Administrator}
+      last-name: ${ADMIN_LAST_NAME:TapIn}
