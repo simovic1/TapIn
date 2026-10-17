@@ -1,0 +1,415 @@
+<title>Upute za TapIn</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: an ink-black belt band with the club's red rank bar, then two chapters (member, trainer) of
+   step rows: text beside a phone screenshot, stacking on narrow screens. */
+:root {
+  --ink: #141012;
+  --red: #d71a20;
+  --red-text: #b3141b;
+  --bg: #f6f5f4;
+  --card: #ffffff;
+  --fg: #1c1719;
+  --muted: #5f585b;
+  --line: #e2dfdd;
+  --tip-bg: #fbeeee;
+  --phone-edge: #141012;
+  --display: 'Big Shoulders Display', 'Arial Narrow', system-ui, sans-serif;
+  --body: 'Figtree', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121011; --card: #1b1719; --fg: #f1eeec; --muted: #b3abae; --line: #2e282a;
+    --tip-bg: #2a1416; --red-text: #ff8a8e; --phone-edge: #3a3335; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121011; --card: #1b1719; --fg: #f1eeec; --muted: #b3abae; --line: #2e282a;
+  --tip-bg: #2a1416; --red-text: #ff8a8e; --phone-edge: #3a3335; color-scheme: dark;
+}
+
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 17px; line-height: 1.6; }
+.wrap { max-width: 1000px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* belt band */
+.band { background: var(--ink); color: #fff; }
+.band .wrap { display: flex; align-items: stretch; gap: 0; padding-block: 0; }
+.bar { background: var(--red); padding: 28px 28px 24px; display: flex; flex-direction: column; gap: 6px; }
+.bar small { font-size: 12px; letter-spacing: .2em; text-transform: uppercase; font-weight: 600; color: #fde4e5; }
+.bar h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: clamp(44px, 9vw, 72px); line-height: .9; text-transform: uppercase; letter-spacing: .02em; text-wrap: balance; }
+.band .sign { flex: 1; display: flex; align-items: center; justify-content: flex-end; padding: 16px 8px 16px 24px; }
+.band .sign svg { height: clamp(64px, 12vw, 104px); width: auto; }
+.lead { padding-block: 28px 8px; max-width: 68ch; }
+.lead p { margin: 0 0 12px; }
+
+nav.chapters { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
+nav.chapters .wrap { display: flex; gap: 8px; flex-wrap: wrap; padding-block: 10px; }
+nav.chapters a { color: var(--fg); text-decoration: none; font-weight: 600; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); }
+nav.chapters a:hover { border-color: var(--red); }
+nav.chapters a:focus-visible, a:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+
+h2.chapter { font-family: var(--display); font-weight: 800; text-transform: uppercase; font-size: clamp(36px, 6vw, 52px); line-height: 1; margin: 56px 0 8px; letter-spacing: .02em; display: flex; align-items: center; gap: 14px; }
+h2.chapter::before { content: ""; width: 14px; height: 36px; background: var(--red); flex: none; }
+.chapter-intro { color: var(--muted); max-width: 68ch; margin: 0 0 8px; }
+
+.step { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 32px; align-items: start; padding-block: 32px; border-top: 1px solid var(--line); }
+.step:first-of-type { border-top: 0; }
+.step h3 { margin: 0 0 8px; font-size: 22px; line-height: 1.25; text-wrap: balance; }
+.step p { margin: 0 0 12px; max-width: 62ch; }
+.step ul, .step ol { margin: 0 0 12px; padding-left: 22px; max-width: 62ch; }
+.step li { margin-bottom: 6px; }
+.shots { display: flex; flex-direction: column; gap: 16px; }
+figure { margin: 0; }
+figure img { display: block; width: 100%; max-width: 280px; border-radius: 22px; border: 6px solid var(--phone-edge); background: #fff; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 6px; max-width: 280px; }
+.ui { font-weight: 600; white-space: nowrap; }
+.tip { background: var(--tip-bg); border-left: 4px solid var(--red); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 4px 0 12px; max-width: 62ch; }
+.tip strong { color: var(--red-text); }
+.status { display: inline-block; font-size: 14px; padding: 1px 10px; border-radius: 999px; font-weight: 600; }
+.s-yes { background: #dcf3e2; color: #155d2b; }
+.s-no { background: #fbe0e1; color: #8f1418; }
+.s-wait { border: 1px dashed #8a8285; color: var(--fg); }
+table.mails { border-collapse: collapse; width: 100%; font-size: 15px; }
+.table-scroll { overflow-x: auto; max-width: 62ch; }
+table.mails th, table.mails td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.mails th { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+dl.faq dt { font-weight: 700; margin-top: 18px; }
+dl.faq dd { margin: 4px 0 0; max-width: 68ch; }
+footer { padding-block: 48px; color: var(--muted); font-size: 14px; }
+
+@media (max-width: 720px) {
+  .step { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .shots { flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
+  figure img { max-width: 240px; width: 240px; }
+  .bar { padding: 20px 18px 18px; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<header class="band">
+  <div class="wrap">
+    <div class="bar">
+      <small>BD Samobor</small>
+      <h1>Upute za TapIn</h1>
+    </div>
+    <div class="sign" aria-hidden="true">
+      <svg viewBox="199 56 264 349"><g fill="#fff"><polygon points="280,92 316,56 316,339 280,375"/><polygon points="324,226 434,226 402,258 324,258"/><polygon points="441,223 463,259 316,405 301,402 288,390 288,381"/></g><polygon fill="#d71a20" points="199,226 271,226 271,258 231,258"/></svg>
+    </div>
+  </div>
+</header>
+
+<div class="wrap lead">
+  <p>TapIn je klupska aplikacija za prijavu na treninge i evidenciju dolazaka. Član se prijavljuje na trening i prati svoje treninge i pojas. Trener na treningu proziva prisutne, vodi raspored, članove i pojaseve.</p>
+  <p>Aplikacija radi u pregledniku na mobitelu i računalu, bez instalacije. Na mobitelu je možete dodati na početni zaslon: u izborniku preglednika odaberite <span class="ui">Dodaj na početni zaslon</span>.</p>
+</div>
+
+<nav class="chapters" aria-label="Poglavlja">
+  <div class="wrap">
+    <a href="#prijava">Prvi ulazak</a>
+    <a href="#clan">Za članove</a>
+    <a href="#trener">Za trenere</a>
+    <a href="#pitanja">Česta pitanja</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <!-- ===================================================== PRVI ULAZAK -->
+  <h2 class="chapter" id="prijava">Prvi ulazak</h2>
+  <p class="chapter-intro">Računa nema bez pozivnice: trener ili administrator vas pozove, a vi aktivirate račun iz e-maila.</p>
+
+  <section class="step">
+    <div>
+      <h3>Aktivacija računa i prijava</h3>
+      <ol>
+        <li>Otvorite e-mail <em>„Pozivnica u BD Samobor”</em> i kliknite poveznicu. Poveznica vrijedi 7 dana.</li>
+        <li>Odaberite lozinku od najmanje 10 znakova. Nakon aktivacije ste odmah prijavljeni.</li>
+        <li>Sljedeći put se prijavljujete e-mail adresom i lozinkom. Prijava ostaje zapamćena na tom uređaju.</li>
+      </ol>
+      <p>Ako je poveznica istekla, zamolite trenera da vam <span class="ui">ponovno pošalje pozivnicu</span>. Stara poveznica tada prestaje vrijediti.</p>
+      <p><strong>Zaboravljena lozinka:</strong> na prijavi kliknite <span class="ui">Zaboravljena lozinka?</span>, upišite e-mail i otvorite poveznicu iz poruke. Poveznica vrijedi 30 minuta.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="img/prijava.jpg" alt="Ekran prijave s poljima E-mail i Lozinka i gumbom Prijavi se" loading="lazy" width="390" height="844"><figcaption>Prijava</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step">
+    <div>
+      <h3>Snalaženje u aplikaciji</h3>
+      <p>Na mobitelu je glavna navigacija na dnu ekrana: <span class="ui">Početna</span>, <span class="ui">Treninzi</span>, <span class="ui">Statistika</span> i <span class="ui">Više</span>. Treneri imaju i <span class="ui">Prozivku</span>. Crta iznad ikone pokazuje gdje se nalazite.</p>
+      <p>Pod <span class="ui">Više</span> su <span class="ui">Moj profil</span>, kod trenera i <span class="ui">Članovi</span> i <span class="ui">Izvještaji</span>, te <span class="ui">Odjava</span>. Na računalu su sve stavke u gornjoj traci.</p>
+      <p>Sva vremena prikazana su po zagrebačkom vremenu.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="img/izbornik-vise.jpg" alt="Otvoren izbornik Više s poveznicama Moj profil i Odjava" loading="lazy" width="390" height="844"><figcaption>Izbornik „Više”</figcaption></figure>
+    </div>
+  </section>
+
+  <!-- ===================================================== ČLAN -->
+  <h2 class="chapter" id="clan">Za članove</h2>
+  <p class="chapter-intro">Prijava na trening, otkazivanje, vaši treninzi i pojas.</p>
+
+  <section class="step">
+    <div>
+      <h3>Početna: sljedeći trening</h3>
+      <p>Početna prikazuje sljedeći i drugi sljedeći trening, s datumom, vremenom i trenerom. Ispod svakog piše vaše stanje:</p>
+      <ul>
+        <li><span class="ui">Prijavljeni ste</span> ili <span class="ui">Niste prijavljeni</span>,</li>
+        <li>je li trener već evidentirao dolazak.</li>
+      </ul>
+      <p>Prijava i otkazivanje su jedan dodir: <span class="ui">Prijavi se</span> ili <span class="ui">Otkaži prijavu</span>. Otkazani treninzi su jasno označeni s „Otkazan”, precrtanim vremenom i razlogom.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="img/clan-pocetna.jpg" alt="Početna s današnjim treningom u tijeku i sutrašnjim treningom s gumbom Otkaži prijavu" loading="lazy" width="390" height="844"><figcaption>Početna</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step">
+    <div>
+      <h3>Prijava i otkazivanje prijave</h3>
+      <p>Na detalju treninga (<span class="ui">Detalji treninga</span>) vidite status, vrijeme, trenere i svoju prijavu.</p>
+      <ul>
+        <li><span class="ui">Prijavi se</span>: dobit ćete potvrdu e-mailom. Poruka „Potvrda je u redu za slanje” znači da je e-mail na putu, ne da je već stigao.</li>
+        <li><span class="ui">Otkaži prijavu</span>: moguće dok trener ne evidentira vaš dolazak. Nakon toga promjene radi trener.</li>
+        <li>Nakon otkazivanja se možete ponovno prijaviti.</li>
+      </ul>
+      <p class="tip"><strong>Prijava nije dolazak.</strong> Trening se broji tek kad trener na prozivci potvrdi da ste bili prisutni. Ako dođete bez prijave, trener vas doda na prozivci i trening se jednako broji.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="img/clan-detalj-prijavljen.jpg" alt="Detalj treninga Open mat, prijavljeni, gumb Otkaži prijavu" loading="lazy" width="390" height="844"><figcaption>Prijavljeni ste</figcaption></figure>
+      <figure><img src="img/clan-prijava-otkazana.jpg" alt="Detalj treninga nakon otkazivanja, poruka Prijava je otkazana i gumb Prijavi se" loading="lazy" width="390" height="844"><figcaption>Nakon otkazivanja</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step">
+    <div>
+      <h3>Kalendar treninga</h3>
+      <p><span class="ui">Treninzi</span> prikazuju sve termine po mjesecima. Strelicama prelazite na prethodni ili sljedeći mjesec. Uz svaki trening piše je li <em>Planiran</em>, <em>Održan</em> ili <em>Otkazan</em> te jeste li prijavljeni. Dodir na trening otvara detalj s gumbom za prijavu.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="img/clan-treninzi.jpg" alt="Kalendar treninga za listopad 2026. s održanim treninzima" loading="lazy" width="390" height="844"><figcaption>Kalendar</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step">
+    <div>
+      <h3>Moja statistika</h3>
+      <p>Broje se samo <strong>potvrđeni dolasci na održane treninge</strong>. Otkazani treninzi se ne broje, a jedan trening vrijedi najviše jedan dolazak.</p>
+      <ul>
+        <li><strong>Odrađeni treninzi:</strong> ukupno, ovaj mjesec, zadnjih 7 i zadnjih 30 dana. Ispod svakog broja piše točno razdoblje; računa se po datumu treninga, uključujući današnji dan.</li>
+        <li><strong>Prijave na održane treninge:</strong> koliko ste se puta prijavili, došli, niste došli, te koliko prijava još <em>čeka evidenciju</em>.</li>
+        <li><strong>Postotak dolazaka:</strong> uz svaki postotak piše od koliko treninga je izračunat. „Dolasci na održane treninge” računaju se od učlanjenja, dok je članstvo bilo aktivno. „Dolazak po prijavi” uzima samo prijave za koje je trener upisao dolazak ili izostanak.</li>
+        <li><strong>Treninzi po pojasu:</strong> koliko ste treninga odradili u kojem pojasu.</li>
+      </ul>
+      <p>Kad trener ispravi dolazak, statistika se mijenja sama. Gumb <span class="ui">Osvježi</span> odmah učitava najnovije brojeve.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="img/clan-statistika.jpg" alt="Moja statistika: ukupno 4, ovaj mjesec 3, zadnjih 7 dana 1, zadnjih 30 dana 4" loading="lazy" width="390" height="844"><figcaption>Brojači s razdobljima</figcaption></figure>
+      <figure><img src="img/clan-statistika-postotak.jpg" alt="Postotak dolazaka 67 posto, 4 od 6 održanih treninga, dolazak po prijavi 80 posto" loading="lazy" width="390" height="844"><figcaption>Postotak i pojas</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step">
+    <div>
+      <h3>Povijest treninga</h3>
+      <p>Na dnu statistike je popis treninga na koje ste se prijavili ili na kojima ste evidentirani, od najnovijeg. Oznake znače:</p>
+      <ul>
+        <li><span class="status s-yes">Došli ste – broji se</span> trener je potvrdio dolazak,</li>
+        <li><span class="status s-no">Niste došli</span> bili ste prijavljeni, a trener je upisao izostanak,</li>
+        <li><span class="status s-wait">Čeka evidenciju trenera</span> trener još nije označio; to <em>nije</em> izostanak,</li>
+        <li><span class="status s-wait">Trening otkazan – ne broji se</span></li>
+      </ul>
+    </div>
+    <div class="shots">
+      <figure><img src="img/clan-povijest.jpg" alt="Povijest treninga s oznakama Došli ste i Niste došli" loading="lazy" width="390" height="844"><figcaption>Povijest</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step">
+    <div>
+      <h3>Moj profil i obavijesti</h3>
+      <p>U <span class="ui">Više → Moj profil</span> vidite svoje podatke, datum učlanjenja, trenutačni pojas i povijest pojaseva. Sami možete promijeniti broj telefona. Za ostale izmjene (ime, e-mail) obratite se administratoru.</p>
+      <p><strong>Podsjetnik</strong> stiže e-mailom 3 sata prije treninga na koji ste prijavljeni. Možete ga isključiti kvačicom; ostale obavijesti i dalje stižu.</p>
+      <div class="table-scroll">
+        <table class="mails">
+          <thead><tr><th>E-mail</th><th>Kada stiže</th></tr></thead>
+          <tbody>
+            <tr><td>Potvrda prijave / otkazivanja</td><td>kad se prijavite ili otkažete</td></tr>
+            <tr><td>Podsjetnik</td><td>3 sata prije treninga (može se isključiti)</td></tr>
+            <tr><td>Trening je otkazan / pomaknut</td><td>kad trener otkaže ili pomakne trening na koji ste prijavljeni</td></tr>
+            <tr><td>Evidentiran dolazak</td><td>kad trener upiše ili ispravi vaš dolazak</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="shots">
+      <figure><img src="img/clan-profil.jpg" alt="Moj profil s podacima člana, poljem za telefon i postavkom podsjetnika" loading="lazy" width="390" height="844"><figcaption>Moj profil</figcaption></figure>
+    </div>
+  </section>
+
+  <!-- ===================================================== TRENER -->
+  <h2 class="chapter" id="trener">Za trenere</h2>
+  <p class="chapter-intro">Prozivka, termini, članovi, pojasevi i izvještaji. Trener koji ima i ulogu člana koristi i sve članske mogućnosti iz prethodnog poglavlja.</p>
+
+  <section class="step">
+    <div>
+      <h3>Prozivka: odabir treninga</h3>
+      <p><span class="ui">Prozivka</span> na vrhu nudi trening koji je u tijeku ili sljedeći (crna kartica <span class="ui">Otvori prozivku</span>), a ispod nedavne i nadolazeće treninge s brojem prijavljenih.</p>
+      <p>Svaki trener može voditi evidenciju za svaki trening; treneri navedeni na terminu su samo informativni.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="img/trener-prozivka-odabir.jpg" alt="Prozivka: kartica Otvori prozivku za današnji trening i popis ostalih treninga" loading="lazy" width="390" height="844"><figcaption>Odabir treninga</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step">
+    <div>
+      <h3>Označavanje dolazaka</h3>
+      <p>Na vrhu su brojevi: <em>Prijavljeni, Prisutni, Odsutni, Nepotvrđeni</em>. Ispod je kartica za svakog prijavljenog člana.</p>
+      <ul>
+        <li>Dodirnite <span class="ui">Prisutan</span> ili <span class="ui">Odsutan</span>. <strong>Svaki odabir se odmah sprema</strong>, nema gumba „Spremi”. Ispod kartice piše <em>Spremanje…</em>, zatim <em>Spremljeno</em>.</li>
+        <li>Boja kartice pokazuje stanje: zelena prisutan, crvena odsutan, bijela još nije označeno.</li>
+        <li>Pogrešku ispravite drugim gumbom. <span class="ui">Poništi oznaku</span> vraća člana na „nije označeno”.</li>
+        <li>U polje <em>Napomena</em> možete upisati razlog prije odabira; zapisuje se u povijest.</li>
+      </ul>
+      <p class="tip"><strong>Svaka stvarna promjena šalje članu e-mail.</strong> Ponovni dodir na već odabrano stanje ne šalje ništa.</p>
+      <p>Ako se pojavi <em>Greška pri spremanju</em>, promjena nije spremljena; pokušajte ponovno. Ako je drugi trener u međuvremenu promijenio istog člana, aplikacija osvježi karticu i vi ponovno odlučite.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="img/trener-prozivka.jpg" alt="Prozivka treninga Fundamentals s brojačima i karticom člana s gumbima Prisutan i Odsutan" loading="lazy" width="390" height="844"><figcaption>Brojači i kartice</figcaption></figure>
+      <figure><img src="img/trener-prozivka-stanja.jpg" alt="Tri kartice: nije označeno, prisutan i odsutan" loading="lazy" width="390" height="844"><figcaption>Tri stanja</figcaption></figure>
+      <figure><img src="img/trener-spremljeno.jpg" alt="Kartica nakon odabira Prisutan s potvrdom Spremljeno" loading="lazy" width="390" height="844"><figcaption>Spremljeno</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step">
+    <div>
+      <h3>Dodavanje člana koji nije prijavljen</h3>
+      <p>Ispod popisa je <span class="ui">Dodaj člana koji nije prijavljen</span>. Upišite barem dva slova imena, prezimena ili e-maila i kod pravog člana dodirnite <span class="ui">Prisutan</span>. Član se dodaje na prozivku kao „Bez prijave · Prisutan” i trening mu se broji.</p>
+      <p>Isto vrijedi za člana koji je otkazao prijavu, a ipak je došao.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="img/trener-dodaj-clana.png" alt="Pretraga člana Nina i potvrda da je dodana kao prisutna" loading="lazy" width="390" height="788"><figcaption>Dodavanje neprijavljenog člana</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step">
+    <div>
+      <h3>Označi sve preostale odsutnima</h3>
+      <p>Kad su prisutni označeni, gumb <span class="ui">Označi sve preostale odsutnima</span> u jednom koraku označi odsutnima sve prijavljene koji još nisu označeni. Prije potvrde vidite njihov popis.</p>
+      <p>Već označeni članovi i oni koji su otkazali prijavu ne mijenjaju se. Svaki obuhvaćeni član dobiva svoju obavijest. Gumb radi tek nakon početka treninga.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="img/trener-svi-odsutni.png" alt="Potvrda: Označiti odsutnima 4 člana, s popisom imena i gumbom Potvrdi" loading="lazy" width="390" height="788"><figcaption>Potvrda s popisom članova</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step">
+    <div>
+      <h3>Revizijska povijest</h3>
+      <p>Na dnu prozivke <span class="ui">Prikaži povijest</span> otvara sve promjene na tom treningu, od najnovije: tko je promijenio, kada, iz kojeg u koje stanje i kojim putem (pojedinačno, masovno, povijesni unos, ispravak). Povijest se može filtrirati po članu i ne može se mijenjati ni brisati.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="img/trener-povijest.jpg" alt="Revizijska povijest: Nije označeno u Odsutan, autor Marko Trener, masovno označavanje" loading="lazy" width="390" height="844"><figcaption>Revizijska povijest</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step">
+    <div>
+      <h3>Upravljanje terminom</h3>
+      <p>Na detalju treninga trener vidi broj prijavljenih i odjeljak <span class="ui">Upravljanje terminom</span>:</p>
+      <ul>
+        <li><span class="ui">Prozivka</span> otvara evidenciju tog treninga,</li>
+        <li><span class="ui">Pomakni ili uredi ovaj termin</span> mijenja vrijeme, naziv ili trenere <strong>samo tog datuma</strong>; tjedni raspored ostaje isti,</li>
+        <li><span class="ui">Otkaži trening</span>: prije potvrde vidite što se otkazuje i koliko je prijavljenih. Možete upisati razlog. Prijavljeni dobivaju e-mail, a otkazani trening se ne broji u statistici.</li>
+      </ul>
+      <p>Trening koji je počeo ili je održan više se ne može pomaknuti ni otkazati.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="img/trener-detalj-treninga.jpg" alt="Detalj treninga za trenera s gumbima Prozivka, Pomakni ili uredi ovaj termin i Otkaži trening" loading="lazy" width="390" height="844"><figcaption>Detalj treninga (trener)</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step">
+    <div>
+      <h3>Dodatni i povijesni trening</h3>
+      <p>Na <span class="ui">Prozivci</span> poveznica <span class="ui">Dodaj trening (uključujući povijesni)</span> otvara obrazac za jednokratni termin izvan tjednog rasporeda (seminar, open mat).</p>
+      <p>Za trening koji je već održan, a nije bio u aplikaciji, označite <span class="ui">Povijesni trening</span>. Termin nastaje kao održan i odmah mu možete upisati dolaske. Dolasci se računaju u statistiku po datumu tog treninga.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="img/trener-novi-trening.jpg" alt="Obrazac Dodatni trening s datumom, početkom, završetkom i kvačicom Povijesni trening" loading="lazy" width="390" height="844"><figcaption>Dodatni trening</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step">
+    <div>
+      <h3>Tjedni raspored</h3>
+      <p>U kalendaru treninga je poveznica na <span class="ui">Tjedni raspored</span>: pravila poput „utorak 18:30–20:00”. Iz njih aplikacija sama stvara termine 60 dana unaprijed.</p>
+      <p>Izmjena pravila mijenja sve buduće termine tog pravila koji još nisu počeli i nisu pojedinačno mijenjani. Prije spremanja vidite koji termini dobivaju novo vrijeme, a koji se otkazuju. Održani termini se ne mijenjaju.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="img/trener-raspored.jpg" alt="Tjedni raspored s pravilima za utorak i četvrtak" loading="lazy" width="390" height="844"><figcaption>Tjedni raspored</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step">
+    <div>
+      <h3>Članovi i pozivnice</h3>
+      <p><span class="ui">Više → Članovi</span> je imenik s pretragom po imenu, prezimenu ili e-mailu i filtrima po članstvu i ulozi. Uz svakog člana piše je li članstvo aktivno i je li račun aktiviran.</p>
+      <p><span class="ui">Pozovi člana</span>: upišite ime, prezime, e-mail i po želji datum učlanjenja (prazno znači danas), pa <span class="ui">Pošalji pozivnicu</span>. Član dobiva e-mail s poveznicom za aktivaciju. Dok je ne prihvati, na njegovom profilu je gumb <span class="ui">Ponovno pošalji pozivnicu</span>.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="img/trener-clanovi.jpg" alt="Imenik članova s pretragom i filtrima" loading="lazy" width="390" height="844"><figcaption>Imenik</figcaption></figure>
+      <figure><img src="img/trener-pozivnica.jpg" alt="Obrazac Pozovi novog člana s poljima ime, prezime, e-mail i datum učlanjenja" loading="lazy" width="390" height="844"><figcaption>Pozivnica</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step">
+    <div>
+      <h3>Pojasevi i promocije</h3>
+      <p>Na profilu člana otvorite <span class="ui">Povijest pojaseva, promocije i ispravci</span>. Vidite trenutačni pojas, datum dodjele i broj treninga u svakom pojasu.</p>
+      <ul>
+        <li><span class="ui">Nova promocija</span>: odaberite pojas i stvarni datum polaganja. Kod <em>Nakon treninga</em> trening toga dana ostaje u starom pojasu, a novi se broji od sljedećeg dana. Kod <em>Prije treninga</em> se već taj trening broji u novi pojas.</li>
+        <li>Stariji pojas bez poznatog datuma unosi se s kvačicom <span class="ui">Datum dodjele nije poznat</span>; aplikacija ne izmišlja datum.</li>
+        <li>Pojas se ne briše: pogrešan unos ispravite gumbom <span class="ui">Ispravi</span>, uz obavezan razlog. Ispravci su vidljivi u povijesti.</li>
+      </ul>
+      <p>Treninzi se po pojasevima raspoređuju sami prema datumima, pa ispravak datuma ili dolaska odmah mijenja i brojeve.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="img/trener-pojasevi.jpg" alt="Pojasevi člana Ana Horvat: bijeli pojas, 4 treninga, gumbi Ispravi i Nova promocija" loading="lazy" width="390" height="844"><figcaption>Pojasevi člana</figcaption></figure>
+      <figure><img src="img/trener-promocija-2.jpg" alt="Obrazac nove promocije s izborom Nakon treninga ili Prije treninga" loading="lazy" width="390" height="844"><figcaption>Nova promocija</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step">
+    <div>
+      <h3>Izvještaji i izvoz</h3>
+      <p><span class="ui">Više → Izvještaji</span> prikazuju dolaske na održanim treninzima za odabrano razdoblje: broj održanih treninga, prosjek prisutnih, dolaske po članu, nedolaske nakon prijave i članove koji dugo nisu dolazili.</p>
+      <p>Filtrirati možete po razdoblju, trenutačnom pojasu i članu. Isti izvještaj možete preuzeti kao CSV datoteku za Excel.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="img/trener-izvjestaji.jpg" alt="Klupski izvještaji s poljima Od, Do, Trenutačni pojas, Redoslijed i Član" loading="lazy" width="390" height="844"><figcaption>Izvještaji</figcaption></figure>
+    </div>
+  </section>
+
+  <!-- ===================================================== PITANJA -->
+  <h2 class="chapter" id="pitanja">Česta pitanja</h2>
+  <dl class="faq">
+    <dt>Prijavio sam se, ali se trening ne vidi u statistici.</dt>
+    <dd>Trening se broji tek kad ga trener potvrdi na prozivci i kad je održan. Dok čeka, u povijesti piše „Čeka evidenciju trenera”.</dd>
+    <dt>Zašto ne mogu otkazati prijavu?</dt>
+    <dd>Trener je već evidentirao vaš dolazak ili izostanak. Ako je pogrešno, javite se treneru da ispravi.</dd>
+    <dt>Nije mi stigao e-mail.</dt>
+    <dd>Provjerite mapu s neželjenom poštom. Poruke se šalju u pozadini, pa mogu kasniti nekoliko minuta. Pozivnicu ili poveznicu za lozinku zatražite ponovno.</dd>
+    <dt>Trener sam i pogriješio sam na prozivci.</dt>
+    <dd>Dodirnite ispravno stanje ili <span class="ui">Poništi oznaku</span>. Član dobiva novu obavijest, a promjena se vidi u revizijskoj povijesti.</dd>
+    <dt>Mogu li biti i trener i član?</dt>
+    <dd>Da. Isti račun ima obje uloge: prijavljujete se na treninge kao član i vodite prozivku kao trener.</dd>
+  </dl>
+</main>
+
+<footer class="wrap">TapIn · BD Samobor. Snimke zaslona napravljene su s testnim podacima.</footer>

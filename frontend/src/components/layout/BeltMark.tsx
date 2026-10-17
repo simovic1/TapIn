@@ -6,7 +6,7 @@ export function BeltMark({ club, size = 'header' }: { club?: string | null; size
   const hero = size === 'hero';
   return (
     <span
-      className={`flex flex-col justify-center bg-dragon-700 leading-none text-white ${
+      className={`flex flex-col justify-center bg-dragon-600 leading-none text-white ${
         hero ? 'gap-1.5 px-6 py-4' : 'h-full gap-1 px-4'
       }`}
     >

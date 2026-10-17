@@ -5,6 +5,7 @@ import { ROLE_LABELS } from '../../lib/session/roles';
 import { useCurrentUser, useLogout } from '../../lib/session/session';
 import { Icon } from '../ui/Icon';
 import { BeltMark } from './BeltMark';
+import { DragonSymbol } from './DragonSymbol';
 import { MoreMenu } from './MoreMenu';
 
 /** On the ink header the active page wears a crimson tape, like the rank bar of the mark. */
@@ -57,8 +58,11 @@ export function AppLayout() {
       </a>
 
       <header className="sticky top-0 z-20 bg-ink text-white">
-        <div className="mx-auto flex h-14 max-w-5xl items-stretch gap-4 pr-4 md:px-4">
-          <NavLink to="/" aria-label={`TapIn – ${user.club.name}, početna`} className="flex">
+        <div className="mx-auto flex h-14 max-w-5xl items-stretch gap-4 pr-4 md:pr-4">
+          <NavLink to="/" aria-label={`TapIn – ${user.club.name}, početna`} className="flex items-stretch">
+            <span className="flex items-center px-3">
+              <DragonSymbol className="h-9 w-auto" />
+            </span>
             <BeltMark club={user.club.name} />
           </NavLink>
           <nav aria-label="Glavna navigacija" className="hidden flex-1 md:block">

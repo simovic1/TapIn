@@ -149,3 +149,7 @@ mijenjaju se zaglavljem `Prefer: example=member|admin` (zadano: trener + član).
   ostaju Tailwindove `red`/`green`/`amber`, namjerno različite od grimizne boje kluba.
 - Fontovi su lokalni (`@fontsource`, bez poziva Googleu): Figtree za tekst, Big Shoulders Display (velika slova,
   700/800) samo za naslove stranica i velike brojke.
+- Znak kluba (simbol iz logotipa, bez natpisa) je vektorski u `components/layout/DragonSymbol.tsx` i stoji u
+  zaglavlju i na kartici prijave. Iste koordinate daju ikone u `public/`: `favicon.svg`, `favicon.ico` (16/32/48),
+  `apple-touch-icon.png`, `icon-192/512.png`, `icon-maskable-512.png` i `manifest.webmanifest`. Crvena iz logotipa
+  je `dragon-600` (`#d71a20`).

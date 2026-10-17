@@ -9,7 +9,7 @@
  * header with a red bar holding the club name. Everything else stays quiet so red keeps meaning "here / now".
  *
  *   ink      #141012  near-black with a warm red undertone (header, primary buttons, text)
- *   dragon   #b3121f  crimson of the rank bar (wordmark bar, active navigation, links, focus)
+ *   dragon   #d71a20  the red of the club logo (rank bar, active navigation, links, focus)
  *   mat      #f6f5f4  light background: neutral, not cream
  *   chalk    #ffffff  cards
  *
@@ -38,8 +38,8 @@
   --color-dragon-300: oklch(0.8 0.115 25);
   --color-dragon-400: oklch(0.7 0.17 25);
   --color-dragon-500: oklch(0.615 0.2 26);
-  --color-dragon-600: oklch(0.545 0.2 26);
-  --color-dragon-700: oklch(0.5 0.19 26);
+  --color-dragon-600: #d71a20; /* logo red */
+  --color-dragon-700: #b3141b;
   --color-dragon-800: oklch(0.42 0.16 26);
   --color-dragon-900: oklch(0.34 0.125 26);
   --color-dragon-950: oklch(0.23 0.085 26);
