@@ -139,3 +139,13 @@ mijenjaju se zaglavljem `Prefer: example=member|admin` (zadano: trener + član).
   „Trening otkazan – ne broji se”.
 - Osvježavanje: svaka uspješna mutacija u aplikaciji poništava upite `statistics` (`app/queryClient.ts`), upiti se
   ponovno čitaju pri povratku na karticu (`refetchOnWindowFocus: always`), a gumb „Osvježi” čita odmah.
+
+## Tema Black Dragon
+
+- Motiv je crveni rang-pojas crnog pojasa: zaglavlje i kartica prijave su tinta-crna traka s crvenim poljem
+  (`components/layout/BeltMark.tsx`) u kojem piše ime kluba (`/me` ili `/system/info`) i „TapIn”. Bez crtica.
+- Tokeni u `src/index.css`: `slate-*` je redefiniran kao topla „tinta” neutralna skala (sve postojeće klase je slijede),
+  `dragon-*` je grimizni naglasak (aktivna navigacija, poveznice, fokus), `ink` je boja zaglavlja. Greške i uspjeh
+  ostaju Tailwindove `red`/`green`/`amber`, namjerno različite od grimizne boje kluba.
+- Fontovi su lokalni (`@fontsource`, bez poziva Googleu): Figtree za tekst, Big Shoulders Display (velika slova,
+  700/800) samo za naslove stranica i velike brojke.

@@ -20,7 +20,7 @@ export function MemberDetailPage() {
   const id = Number(useParams().membershipId);
   const member = useQuery({ queryKey: memberKeys.detail(id), queryFn: () => getMember(id) });
   return <>
-    <Link to="/clanovi" className="mb-4 inline-flex min-h-11 items-center text-blue-700 underline">Natrag na imenik</Link>
+    <Link to="/clanovi" className="mb-4 inline-flex min-h-11 items-center text-dragon-700 underline">Natrag na imenik</Link>
     <QueryState query={member}>{data => <MemberPanel key={data.membershipId} initial={data} />}</QueryState>
   </>;
 }
@@ -102,7 +102,7 @@ function MemberPanel({ initial }: { initial: Member }) {
     </dl>}
     <section className="space-y-2 rounded-xl border p-4" aria-label="Pojas"><h2 className="text-lg font-semibold">Pojas</h2>
       <p>{member.currentBelt === 'UNKNOWN' ? 'Pojas nije evidentiran.' : `${BELT_NAMES[member.currentBelt]} pojas, dodijeljen ${member.currentBeltAwardedOn ? new Date(member.currentBeltAwardedOn + 'T12:00:00').toLocaleDateString('hr-HR') : '(datum nije evidentiran)'}`}</p>
-      <Link to={`/clanovi/${member.membershipId}/pojasevi`} className="inline-flex min-h-11 items-center text-blue-700 underline">Povijest pojaseva, promocije i ispravci</Link>
+      <Link to={`/clanovi/${member.membershipId}/pojasevi`} className="inline-flex min-h-11 items-center text-dragon-700 underline">Povijest pojaseva, promocije i ispravci</Link>
     </section>
     <section className="space-y-3 rounded-xl border p-4"><h2 className="text-lg font-semibold">Povijest aktivnosti članstva</h2>
       {member.statusHistory?.length ? <ol className="space-y-2">{member.statusHistory.map((event, index) => <li key={`${event.effectiveAt}-${index}`}>

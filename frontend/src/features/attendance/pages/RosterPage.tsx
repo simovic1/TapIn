@@ -100,7 +100,7 @@ function Counters({ roster }: { roster: Roster }) {
       {items.map(([label, value]) => (
         <div key={label} className="rounded-xl border border-slate-200 bg-white p-2 text-center dark:border-slate-800 dark:bg-slate-900">
           <dt className="text-xs text-slate-600 dark:text-slate-400">{label}</dt>
-          <dd className="text-xl font-semibold tabular-nums">{value}</dd>
+          <dd className="font-display text-3xl leading-tight font-bold tabular-nums">{value}</dd>
         </div>
       ))}
     </dl>

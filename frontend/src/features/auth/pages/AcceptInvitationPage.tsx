@@ -69,7 +69,7 @@ function InvalidInvitation({ message }: { message: string }) {
     <div className="flex flex-col gap-4">
       <h1 className="text-xl font-semibold">Aktivacija računa</h1>
       <Alert tone="error">{message}</Alert>
-      <Link to="/prijava" className="text-sm font-medium text-blue-700 underline-offset-4 hover:underline dark:text-blue-400">
+      <Link to="/prijava" className="text-sm font-medium text-dragon-700 underline-offset-4 hover:underline dark:text-dragon-300">
         Već imate račun? Prijavite se
       </Link>
     </div>

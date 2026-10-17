@@ -78,7 +78,7 @@ export function LoginPage() {
 
       <Link
         to="/zaboravljena-lozinka"
-        className="self-center rounded text-sm font-medium text-blue-700 underline-offset-4 hover:underline dark:text-blue-400"
+        className="self-center rounded text-sm font-medium text-dragon-700 underline-offset-4 hover:underline dark:text-dragon-300"
       >
         Zaboravljena lozinka?
       </Link>

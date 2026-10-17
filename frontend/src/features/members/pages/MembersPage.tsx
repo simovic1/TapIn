@@ -49,7 +49,7 @@ export function MembersPage({ administration = false }: { administration?: boole
           <p className="mb-3 text-sm">Ukupno članova: {data.page.totalElements}</p>
           <ul className="grid gap-3 md:grid-cols-2">
             {data.items.map(member => <li key={member.membershipId} className="space-y-2 rounded-xl border p-4">
-              <Link className="inline-flex min-h-11 items-center text-lg font-semibold text-blue-700 underline" to={`/clanovi/${member.membershipId}`}>{member.firstName} {member.lastName}</Link>
+              <Link className="inline-flex min-h-11 items-center text-lg font-semibold text-dragon-700 underline" to={`/clanovi/${member.membershipId}`}>{member.firstName} {member.lastName}</Link>
               <p className="break-all">{member.email}</p>
               <MemberStatus accountStatus={member.accountStatus} membershipStatus={member.membershipStatus} />
               <p className="text-sm">{member.roles.map(role => ROLE_LABELS[role as Role]).join(', ')} · Član od {new Date(member.joinedOn + 'T12:00:00').toLocaleDateString('hr-HR')}</p>

@@ -119,7 +119,7 @@ function Counter({ label, value, period }: { label: string; value: number; perio
   return (
     <div className={card}>
       <dt className={`text-sm ${muted}`}>{label}</dt>
-      <dd className="text-2xl font-semibold tabular-nums">{value}</dd>
+      <dd className="font-display text-4xl leading-tight font-bold tabular-nums">{value}</dd>
       {period && <dd className={`mt-1 text-xs ${muted}`}>{period}</dd>}
     </div>
   );
@@ -146,7 +146,7 @@ function Rate({
         <p className="mt-1">{empty}</p>
       ) : (
         <>
-          <p className="text-2xl font-semibold tabular-nums">{value}</p>
+          <p className="font-display text-4xl leading-tight font-bold tabular-nums">{value}</p>
           <p className="mt-1 text-sm">{basis(rate)}</p>
         </>
       )}

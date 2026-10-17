@@ -41,11 +41,11 @@ export function BeltHistoryView({ history, actions }: { history: BeltHistory; ac
         </div>
         <div>
           <dt className="text-xs text-slate-500 dark:text-slate-400">Treninzi u tom pojasu</dt>
-          <dd className="text-xl font-semibold tabular-nums">{history.currentBeltTrainings}</dd>
+          <dd className="font-display text-3xl leading-tight font-bold tabular-nums">{history.currentBeltTrainings}</dd>
         </div>
         <div>
           <dt className="text-xs text-slate-500 dark:text-slate-400">Ukupno treninga</dt>
-          <dd className="text-xl font-semibold tabular-nums">{history.totalTrainings}</dd>
+          <dd className="font-display text-3xl leading-tight font-bold tabular-nums">{history.totalTrainings}</dd>
         </div>
       </dl>
 

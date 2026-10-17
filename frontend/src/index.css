@@ -1,7 +1,50 @@
 @import 'tailwindcss';
+/* Self-hosted (no request to Google per visitor); both cover latin-ext for č ć đ š ž. */
+@import '@fontsource-variable/figtree';
+@import '@fontsource/big-shoulders-display/700';
+@import '@fontsource/big-shoulders-display/800';
 
+/*
+ * Black Dragon theme. The club wears black and red, and the black belt's red rank bar is the motif: an ink-black
+ * header with a red bar holding the club name. Everything else stays quiet so red keeps meaning "here / now".
+ *
+ *   ink      #141012  near-black with a warm red undertone (header, primary buttons, text)
+ *   dragon   #b3121f  crimson of the rank bar (wordmark bar, active navigation, links, focus)
+ *   mat      #f6f5f4  light background: neutral, not cream
+ *   chalk    #ffffff  cards
+ *
+ * `slate` is redefined as the ink neutral scale, so every existing slate-* class follows the theme; `dragon` is the
+ * accent. Error/success/warning keep Tailwind's red/green/amber, deliberately different from the brand crimson.
+ */
 @theme {
-  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Figtree Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Big Shoulders Display', 'Arial Narrow', system-ui, sans-serif;
+
+  --color-slate-50: oklch(0.973 0.002 20);
+  --color-slate-100: oklch(0.948 0.004 20);
+  --color-slate-200: oklch(0.905 0.006 20);
+  --color-slate-300: oklch(0.84 0.008 20);
+  --color-slate-400: oklch(0.7 0.011 20);
+  --color-slate-500: oklch(0.565 0.012 20);
+  --color-slate-600: oklch(0.455 0.012 20);
+  --color-slate-700: oklch(0.37 0.011 20);
+  --color-slate-800: oklch(0.275 0.01 20);
+  --color-slate-900: oklch(0.205 0.009 20);
+  --color-slate-950: oklch(0.155 0.008 20);
+
+  --color-dragon-50: oklch(0.97 0.014 25);
+  --color-dragon-100: oklch(0.936 0.032 25);
+  --color-dragon-200: oklch(0.885 0.065 25);
+  --color-dragon-300: oklch(0.8 0.115 25);
+  --color-dragon-400: oklch(0.7 0.17 25);
+  --color-dragon-500: oklch(0.615 0.2 26);
+  --color-dragon-600: oklch(0.545 0.2 26);
+  --color-dragon-700: oklch(0.5 0.19 26);
+  --color-dragon-800: oklch(0.42 0.16 26);
+  --color-dragon-900: oklch(0.34 0.125 26);
+  --color-dragon-950: oklch(0.23 0.085 26);
+
+  --color-ink: #141012;
 }
 
 @layer base {
@@ -11,6 +54,6 @@
 
   /* Clearly visible keyboard focus on every interactive element (mouse clicks keep no ring). */
   :focus-visible {
-    @apply outline-2 outline-offset-2 outline-blue-600 dark:outline-blue-400;
+    @apply outline-2 outline-offset-2 outline-dragon-600 dark:outline-dragon-300;
   }
 }

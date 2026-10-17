@@ -59,8 +59,8 @@ export function PasswordRecoveryForm({ confirm = false }: { confirm?: boolean })
           {confirm ? 'Spremi lozinku' : 'Pošalji poveznicu'}
         </Button>
       </>}
-      <Link to="/prijava" className="text-blue-700 underline">Natrag na prijavu</Link>
-      {confirm && !reset.isSuccess && <Link to="/zaboravljena-lozinka" className="text-blue-700 underline">Zatraži novu poveznicu</Link>}
+      <Link to="/prijava" className="text-dragon-700 underline">Natrag na prijavu</Link>
+      {confirm && !reset.isSuccess && <Link to="/zaboravljena-lozinka" className="text-dragon-700 underline">Zatraži novu poveznicu</Link>}
     </form>
   );
 }

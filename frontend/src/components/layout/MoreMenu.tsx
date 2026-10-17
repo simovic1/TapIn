@@ -53,9 +53,11 @@ export function MoreMenu({ items, onLogout, loggingOut }: MoreMenuProps) {
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((value) => !value)}
-        className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-xs font-medium ${
-          open || activeInside ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'
-        }`}
+        className={`relative flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-xs font-medium ${
+          open || activeInside
+            ? 'text-slate-900 dark:text-white'
+            : 'text-slate-500 dark:text-slate-400'
+        } ${activeInside ? 'before:absolute before:inset-x-3 before:top-0 before:h-[3px] before:bg-dragon-600 dark:before:bg-dragon-400' : ''}`}
       >
         <Icon name={open ? 'close' : 'menu'} />
         Više

@@ -4,18 +4,20 @@ import { navigationFor, splitForMobile, type NavItem } from '../../app/navigatio
 import { ROLE_LABELS } from '../../lib/session/roles';
 import { useCurrentUser, useLogout } from '../../lib/session/session';
 import { Icon } from '../ui/Icon';
+import { BeltMark } from './BeltMark';
 import { MoreMenu } from './MoreMenu';
 
+/** On the ink header the active page wears a crimson tape, like the rank bar of the mark. */
 const desktopLink = ({ isActive }: { isActive: boolean }) =>
-  `inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-medium whitespace-nowrap ${
-    isActive
-      ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
-      : 'text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-800'
+  `inline-flex h-full min-h-14 items-center border-b-[3px] px-3 pt-[3px] text-sm font-semibold whitespace-nowrap transition-colors ${
+    isActive ? 'border-dragon-500 text-white' : 'border-transparent text-slate-300 hover:text-white'
   }`;
 
 const mobileLink = ({ isActive }: { isActive: boolean }) =>
-  `flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-xs font-medium ${
-    isActive ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'
+  `relative flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-xs font-medium ${
+    isActive
+      ? 'text-slate-900 before:absolute before:inset-x-3 before:top-0 before:h-[3px] before:bg-dragon-600 dark:text-white dark:before:bg-dragon-400'
+      : 'text-slate-500 dark:text-slate-400'
   }`;
 
 export function AppLayout() {
@@ -54,15 +56,15 @@ export function AppLayout() {
         Preskoči na sadržaj
       </a>
 
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
-        <div className="mx-auto flex max-w-5xl items-center gap-4 px-4 py-2">
-          <NavLink to="/" className="rounded-lg text-lg font-bold tracking-tight">
-            TapIn
+      <header className="sticky top-0 z-20 bg-ink text-white">
+        <div className="mx-auto flex h-14 max-w-5xl items-stretch gap-4 pr-4 md:px-4">
+          <NavLink to="/" aria-label={`TapIn – ${user.club.name}, početna`} className="flex">
+            <BeltMark club={user.club.name} />
           </NavLink>
           <nav aria-label="Glavna navigacija" className="hidden flex-1 md:block">
-            <ul className="flex flex-wrap gap-1">
+            <ul className="flex h-full gap-1">
               {items.map((item) => (
-                <li key={item.to}>
+                <li key={item.to} className="flex">
                   <NavLink to={item.to} end={item.to === '/'} className={desktopLink}>
                     {item.label}
                   </NavLink>
@@ -75,7 +77,7 @@ export function AppLayout() {
               <p className="font-medium">
                 {user.firstName} {user.lastName}
               </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-slate-400">
                 {user.roles.map((role) => ROLE_LABELS[role]).join(' · ')}
               </p>
             </div>
@@ -83,7 +85,7 @@ export function AppLayout() {
               type="button"
               onClick={onLogout}
               disabled={logout.isPending}
-              className="hidden min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-medium text-slate-600 hover:bg-slate-200 md:inline-flex dark:text-slate-300 dark:hover:bg-slate-800"
+              className="hidden min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-medium text-slate-300 hover:bg-white/10 hover:text-white md:inline-flex"
             >
               <Icon name="logout" className="size-4" />
               Odjava

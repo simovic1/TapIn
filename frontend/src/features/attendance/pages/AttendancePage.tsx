@@ -38,7 +38,7 @@ export function AttendancePage() {
                   className="flex min-h-11 flex-col gap-1 rounded-2xl bg-slate-900 p-4 text-white hover:bg-slate-700 dark:bg-white dark:text-slate-900"
                 >
                   <span className="text-sm font-semibold uppercase opacity-80">Otvori prozivku</span>
-                  <span className="text-xl font-semibold tabular-nums">{formatTimeRange(top.startAt, top.endAt)}</span>
+                  <span className="font-display text-3xl font-bold tabular-nums">{formatTimeRange(top.startAt, top.endAt)}</span>
                   <span className="first-letter:uppercase">
                     {formatLongDate(top.startAt)} · {top.title ?? 'Trening'}
                     {top.registeredCount !== undefined && ` · prijavljeno: ${top.registeredCount}`}

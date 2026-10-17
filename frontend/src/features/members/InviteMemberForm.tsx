@@ -27,7 +27,7 @@ export function InviteMemberForm({ admin }: { admin: boolean }) {
   };
   if (invite.isSuccess) return <div className="space-y-4 rounded-xl border p-4">
     <Alert tone="success">Pozivnica za {invite.data.email} je stavljena u red za slanje. Član će aktivirati račun putem poveznice u e-mailu.</Alert>
-    <Link className="inline-flex min-h-11 items-center text-blue-700 underline" to={`/clanovi/${invite.data.membershipId}`}>Otvori profil pozvanog člana</Link>
+    <Link className="inline-flex min-h-11 items-center text-dragon-700 underline" to={`/clanovi/${invite.data.membershipId}`}>Otvori profil pozvanog člana</Link>
     <Button onClick={() => { invite.reset(); setFirstName(''); setLastName(''); setEmail(''); setJoinedOn(''); setRoles(['MEMBER']); }}>Pozovi još jednog člana</Button>
   </div>;
   return <form onSubmit={submit} aria-label="Pozovi člana" className="space-y-4 rounded-xl border p-4">
