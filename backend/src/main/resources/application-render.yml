@@ -1,0 +1,20 @@
+# Combined SPA + API service. Activate together with prod.
+server:
+  port: ${PORT:8080}
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME}?sslmode=require
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+
+tapin:
+  frontend:
+    enabled: true
+  app:
+    base-url: ${RENDER_EXTERNAL_URL}
+  bootstrap:
+    admin:
+      email: ${ADMIN_EMAIL}
+      password: ${ADMIN_PASSWORD:}

@@ -1,6 +1,9 @@
 package com.tapin.auth;
 
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpMethod;
+import com.tapin.shared.web.SpaWebConfig;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -55,14 +58,23 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, SecurityContextRepository contextRepository,
             CookieCsrfTokenRepository csrfTokenRepository,
-            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver) throws Exception {
+            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver,
+            @Value("${tapin.frontend.enabled:false}") boolean serveFrontend) throws Exception {
         return http
                 .csrf(csrf -> csrf.spa().csrfTokenRepository(csrfTokenRepository))
                 .securityContext(context -> context.securityContextRepository(contextRepository))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 // The SPA handles "return to page after login" itself; no session for anonymous 401s.
                 .requestCache(cache -> cache.disable())
-                .authorizeHttpRequests(ApiAuthorizationRules::apply)
+                .authorizeHttpRequests(auth -> {
+                    if (serveFrontend) {
+                        auth.requestMatchers(HttpMethod.GET, SpaWebConfig.PAGE_PATHS).permitAll()
+                                .requestMatchers(HttpMethod.HEAD, SpaWebConfig.PAGE_PATHS).permitAll()
+                                .requestMatchers(HttpMethod.GET, SpaWebConfig.ASSET_PATHS).permitAll()
+                                .requestMatchers(HttpMethod.HEAD, SpaWebConfig.ASSET_PATHS).permitAll();
+                    }
+                    ApiAuthorizationRules.apply(auth);
+                })
                 .logout(logout -> logout
                         .logoutUrl(LOGOUT_URL)
                         .invalidateHttpSession(true)

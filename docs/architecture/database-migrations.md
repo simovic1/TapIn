@@ -18,6 +18,11 @@ Shemu baze isključivo vodi **Flyway** (`backend/src/main/resources/db/migration
 
 CI (`scripts/check-migrations.sh`) odbija neispravan naziv, duplikat ili rupu u numeraciji. Lokalno:
 
+Iznimke su već objavljene migracije `V015__notification_inbox.sql` i
+`V016__push_without_subscription_is_skipped.sql` (obje pripadaju modulu `notifications`).
+Zadržavaju izvorne nazive radi Flyway povijesti postojećih baza. CI dopušta samo ta dva
+točna naziva; provjera numeracije vrijedi i za njih, a nove migracije slijede gornji format.
+
 ```bash
 sh scripts/check-migrations.sh
 ```

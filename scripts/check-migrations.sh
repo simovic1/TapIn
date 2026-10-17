@@ -12,7 +12,13 @@ expected=1
 for path in $(ls "$DIR" | sort); do
   case "$path" in
     V*)
-      if ! echo "$path" | grep -Eq "^V[0-9]{3}__(${MODULES})_[a-z0-9_]+\.sql$"; then
+      # Already shipped on master: preserve Flyway descriptions in existing databases.
+      # These exact exceptions do not relax module naming for future migrations.
+      legacy=false
+      case "$path" in
+        V015__notification_inbox.sql|V016__push_without_subscription_is_skipped.sql) legacy=true ;;
+      esac
+      if [ "$legacy" = false ] && ! echo "$path" | grep -Eq "^V[0-9]{3}__(${MODULES})_[a-z0-9_]+\.sql$"; then
         echo "ERROR: invalid versioned migration name: $path"; status=1; continue
       fi
       version=$(echo "$path" | sed -E 's/^V0*([0-9]+)__.*/\1/')

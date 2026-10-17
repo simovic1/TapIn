@@ -1,0 +1,62 @@
+# Free trial only: database expires after 30 days; the app sleeps when idle.
+services:
+  - type: web
+    name: tapin-trial
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    healthCheckPath: /actuator/health/readiness
+    autoDeployTrigger: off
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod,render
+      - key: DB_HOST
+        fromDatabase:
+          name: tapin-trial-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: tapin-trial-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: tapin-trial-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: tapin-trial-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: tapin-trial-db
+          property: password
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: CLUB_NAME
+        value: BD Samobor
+      # Free Render blocks standard SMTP ports. Account e-mails are NOT delivered in this trial.
+      - key: MAIL_PROVIDER
+        value: log
+      - key: MAIL_HOST
+        value: localhost
+      - key: MAIL_FROM
+        value: no-reply@tapin.local
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+
+databases:
+  - name: tapin-trial-db
+    plan: free
+    region: frankfurt
+    postgresMajorVersion: '18'
+    databaseName: tapin
+    user: tapin
+    ipAllowList: []

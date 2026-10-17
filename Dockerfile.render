@@ -1,0 +1,25 @@
+# One Render web service: build the SPA, then package it inside Spring Boot.
+FROM node:24.22.0-alpine AS frontend
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
+RUN npm ci --no-audit --no-fund
+COPY frontend/ ./
+RUN npm run build
+
+FROM eclipse-temurin:21.0.12.1_1-jdk-alpine AS backend
+WORKDIR /app/backend
+COPY backend/.mvn .mvn
+COPY backend/mvnw backend/pom.xml ./
+RUN chmod +x mvnw && ./mvnw -q -B dependency:go-offline
+COPY backend/src ./src
+COPY --from=frontend /app/frontend/dist ./src/main/resources/static
+RUN ./mvnw -q -B -DskipTests package && cp target/tapin-backend-*.jar app.jar
+
+FROM eclipse-temurin:21.0.12.1_1-jre-alpine
+WORKDIR /app
+RUN addgroup -S tapin && adduser -S tapin -G tapin
+COPY --from=backend /app/backend/app.jar app.jar
+USER tapin
+ENV SPRING_PROFILES_ACTIVE=prod,render
+# Leave room for metaspace, native allocations and thread stacks on the 512 MB free instance.
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=50", "-XX:+UseSerialGC", "-jar", "app.jar"]
