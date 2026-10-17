@@ -29,7 +29,8 @@ import java.util.Optional;
  * audited. There is no DELETE: a wrong entry is corrected, never removed without a trace.
  * <ul>
  *   <li>{@code awardedOn} is the real award date (may be unknown, never invented); {@code effectiveFromDate} is when
- *       counting starts: the next day for AFTER_TRAINING, the same day for BEFORE_TRAINING.</li>
+ *       counting starts: the next day for AFTER_TRAINING, the same day for BEFORE_TRAINING. A WHITE belt entered with
+ *       neither date counts from the membership's {@code joined_on}; the award date stays unknown.</li>
  *   <li>Chronology: ordered by start date, every period is a strictly higher belt than the one before, and known award
  *       dates follow the same order. Equal start dates are a {@code 409 BELT_DUPLICATE_EFFECTIVE_DATE}, any other
  *       violation a {@code 422 BELT_CHRONOLOGY_INVALID}.</li>
@@ -115,7 +116,10 @@ public class BeltService {
     public MutationResult create(AuthenticatedUser actor, long membershipId, CreateCommand command) {
         requireMember(membershipId);
         lock(membershipId);
-        LocalDate effective = effectiveFrom(command.awardedOn(), command.promotionTiming(), command.effectiveFromDate());
+        LocalDate effective = effectiveFrom(command.awardedOn(), command.promotionTiming(),
+                command.effectiveFromDate() == null && command.awardedOn() == null && command.belt() == Belt.WHITE
+                        ? directory.joinedOn(membershipId).orElse(null) // initial white belt: counted from joining
+                        : command.effectiveFromDate());
         validateDates(command.awardedOn(), effective);
         requireUser(command.awardedByUserId());
         String note = clean(command.note());

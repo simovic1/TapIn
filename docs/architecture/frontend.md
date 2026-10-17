@@ -84,7 +84,8 @@ frontend/src/
   pojasu i ukupno, razdoblja s brojem treninga, „neraspoređeni” te povijest ispravaka.
 - Obrazac razdvaja **datum dodjele** (stvarni datum polaganja) od **početka brojanja** i prije spremanja prikazuje
   početak brojanja: „nakon treninga” = sljedeći dan, „prije treninga” = isti dan. Stariji pojas bez poznatog datuma
-  unosi se s „Datum dodjele nije poznat” + „Treninzi se broje od”; datum dodjele ostaje „datum nije evidentiran”.
+  unosi se s „Datum dodjele nije poznat” + „Treninzi se broje od”; datum dodjele ostaje „datum nije evidentiran”. Bijeli pojas bez
+  oba datuma broji se od datuma učlanjenja člana (backend `BeltService`, obrazac to prikazuje prije spremanja).
 - Ispravak traži razlog (audit). `409 VERSION_CONFLICT` otvara obrazac sa svježim stanjem iz `currentState` i traži
   novu odluku; uspjeh se prikazuje tek nakon odgovora i osvježava povijest (iz odgovora), audit i prikaze članova.
 - `/profil` prikazuje vlastitu povijest pojaseva samo za čitanje (`/me/belts`).

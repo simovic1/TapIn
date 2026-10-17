@@ -1,6 +1,6 @@
 # TapIn – evidencija BJJ treninga
 
-Web aplikacija za BJJ klub: članovi se prijavljuju na treninge, treneri evidentiraju stvarne dolaske, sustav vodi
+Web aplikacija za BD Samobor: članovi se prijavljuju na treninge, treneri evidentiraju stvarne dolaske, sustav vodi
 statistiku, povijest pojaseva i šalje e-mail obavijesti.
 
 Specifikacija: [`docs/bjj_evidencija_specifikacija_mvp_v1_1.md`](docs/bjj_evidencija_specifikacija_mvp_v1_1.md).

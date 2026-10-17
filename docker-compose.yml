@@ -60,7 +60,7 @@ services:
       MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-false}
       MAIL_STARTTLS: ${MAIL_STARTTLS:-false}
       MAIL_SSL: ${MAIL_SSL:-false}
-      CLUB_NAME: ${CLUB_NAME:-BJJ klub (local)}
+      CLUB_NAME: ${CLUB_NAME:-BD Samobor (local)}
       # Origin used in e-mail links (https://localhost:8443 with the https profile)
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@tapin.local}

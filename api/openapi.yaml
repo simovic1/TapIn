@@ -108,7 +108,7 @@ paths:
               example:
                 application: TapIn
                 version: 0.1.0
-                clubName: BJJ klub
+                clubName: BD Samobor
                 timeZone: Europe/Zagreb
                 serverTime: '2026-10-20T14:00:00Z'
         '429': { $ref: '#/components/responses/TooManyRequests' }
@@ -618,7 +618,7 @@ paths:
       description: |
         `effectiveFromDate` se izračunava iz `awardedOn` i `promotionTiming`: `AFTER_TRAINING` → sljedeći dan,
         `BEFORE_TRAINING` → isti dan. Za povijesni unos bez poznatog datuma dodjele (`awardedOn: null`) obvezan je
-        `effectiveFromDate`. Isti efektivni datum kao postojeći → `409 BELT_DUPLICATE_EFFECTIVE_DATE`;
+        `effectiveFromDate`; bijeli pojas bez oba datuma broji se od datuma učlanjenja člana. Isti efektivni datum kao postojeći → `409 BELT_DUPLICATE_EFFECTIVE_DATE`;
         neispravan kronološki slijed → `422 BELT_CHRONOLOGY_INVALID`: poredano po `effectiveFromDate` svaki je pojas
         strogo viši od prethodnog, a poznati datumi dodjele idu istim redom (raniji niži pojas smije se naknadno
         unijeti). Datum dodjele u budućnosti → `400`. Istodobni unosi za istog člana serijaliziraju se i cijela se
@@ -1421,7 +1421,7 @@ components:
         membershipStatus: ACTIVE
         roles: [MEMBER, TRAINER]
         joinedOn: '2024-03-01'
-        club: { name: BJJ klub, timeZone: Europe/Zagreb }
+        club: { name: BD Samobor, timeZone: Europe/Zagreb }
         version: 4
         trainingRemindersEnabled: true
     CurrentUserMember:
@@ -1437,7 +1437,7 @@ components:
         membershipStatus: ACTIVE
         roles: [MEMBER]
         joinedOn: '2024-03-01'
-        club: { name: BJJ klub, timeZone: Europe/Zagreb }
+        club: { name: BD Samobor, timeZone: Europe/Zagreb }
         version: 4
         trainingRemindersEnabled: true
     CurrentUserAdmin:
@@ -1453,7 +1453,7 @@ components:
         membershipStatus: ACTIVE
         roles: [ADMIN, MEMBER]
         joinedOn: '2024-03-01'
-        club: { name: BJJ klub, timeZone: Europe/Zagreb }
+        club: { name: BD Samobor, timeZone: Europe/Zagreb }
         version: 4
         trainingRemindersEnabled: true
 
@@ -2048,7 +2048,7 @@ components:
         effectiveFromDate:
           type: string
           format: date
-          description: Obvezno ako je `awardedOn` null; inače se ignorira (izračunava se).
+          description: Obvezno ako je `awardedOn` null, osim za bijeli pojas, koji se tada broji od datuma učlanjenja (`joinedOn`); uz poznat `awardedOn` se ignorira (izračunava se).
         awardedByUserId:
           oneOf: [{ $ref: '#/components/schemas/UserId' }, { type: 'null' }]
         note: { type: [string, 'null'], maxLength: 500 }

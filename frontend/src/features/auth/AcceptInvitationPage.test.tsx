@@ -8,7 +8,7 @@ const preview = {
   email: 'nova@klub.hr',
   firstName: 'Nova',
   lastName: 'Članica',
-  clubName: 'BJJ klub',
+  clubName: 'BD Samobor',
   expiresAt: '2026-10-27T10:00:00Z',
 };
 describe('AcceptInvitationPage', () => {

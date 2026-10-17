@@ -50,8 +50,13 @@ export function valuesOf(p: BeltPeriod): BeltFormValues {
   };
 }
 
+/** A white belt entered without any date counts from the member's join date (the server applies the same rule). */
+const defaultsToJoinDate = (v: BeltFormValues, correction: boolean) =>
+  !correction && !v.awardedKnown && v.belt === 'WHITE' && !v.effectiveFromDate;
+
 /** Start of counting implied by the form (shown before saving, spec §3.3). */
-export function countingStart(v: BeltFormValues): string | null {
+export function countingStart(v: BeltFormValues, memberSince?: string | null, correction = false): string | null {
+  if (defaultsToJoinDate(v, correction)) return memberSince ?? null;
   if (!v.awardedKnown) return v.effectiveFromDate || null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v.awardedOn)) return null;
   return v.timing === 'AFTER_TRAINING' ? addDays(v.awardedOn, 1) : v.awardedOn;
@@ -65,6 +70,8 @@ function validate(v: BeltFormValues, correction: boolean): Errors {
   if (v.awardedKnown) {
     if (!DATE.test(v.awardedOn)) errors.awardedOn = 'Unesite datum dodjele ili označite da nije poznat.';
     else if (v.awardedOn > today) errors.awardedOn = 'Datum dodjele ne može biti u budućnosti.';
+  } else if (defaultsToJoinDate(v, correction)) {
+    // empty is fine: counted from the join date
   } else if (!DATE.test(v.effectiveFromDate)) {
     errors.effectiveFromDate = 'Unesite od kada se treninzi broje u ovaj pojas.';
   } else if (v.effectiveFromDate > today) {
@@ -88,6 +95,7 @@ export function BeltForm({
   onDone,
   onCancel,
   onConflict,
+  memberSince,
 }: {
   title: string;
   initial: BeltFormValues;
@@ -98,6 +106,8 @@ export function BeltForm({
   onCancel: () => void;
   /** 409 VERSION_CONFLICT with the fresh period from the server. */
   onConflict?: (fresh: BeltPeriod | undefined) => void;
+  /** Member's join date: the default start of a white belt entered without dates. */
+  memberSince?: string | null;
 }) {
   const [values, setValues] = useState(initial);
   const [errors, setErrors] = useState<Errors>({});
@@ -105,7 +115,8 @@ export function BeltForm({
   const [saving, setSaving] = useState(false);
   const timingName = useId();
   const set = (patch: Partial<BeltFormValues>) => setValues((v) => ({ ...v, ...patch }));
-  const start = countingStart(values);
+  const start = countingStart(values, memberSince, correction);
+  const fromJoinDate = defaultsToJoinDate(values, correction);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -210,17 +221,22 @@ export function BeltForm({
         <TextField
           label="Treninzi se broje od"
           type="date"
-          required
+          required={correction || values.belt !== 'WHITE'}
           max={clubToday()}
           value={values.effectiveFromDate}
           onChange={(e) => set({ effectiveFromDate: e.target.value })}
           error={errors.effectiveFromDate}
-          hint="Na primjer datum učlanjenja za početni bijeli pojas. Datum dodjele ostaje „nije evidentiran”."
+          hint={
+            !correction && values.belt === 'WHITE'
+              ? `Ako ostavite prazno, bijeli pojas broji se od datuma učlanjenja${memberSince ? ` (${shortDate(memberSince)})` : ''}. Datum dodjele ostaje „nije evidentiran”.`
+              : 'Datum dodjele ostaje „nije evidentiran”.'
+          }
         />
       )}
       <p className="text-sm" aria-live="polite">
         Početak brojanja treninga: <span className="font-semibold">{start ? shortDate(start) : '–'}</span>
         {values.awardedKnown && start && ' (datum dodjele prikazuje se zasebno)'}
+        {fromJoinDate && start && ' (datum učlanjenja)'}
       </p>
       <TextArea label="Napomena" maxLength={500} value={values.note} onChange={(e) => set({ note: e.target.value })} />
       {correction && (

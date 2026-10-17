@@ -403,7 +403,7 @@ export interface paths {
          * Nova promocija ili početni/povijesni unos pojasa
          * @description `effectiveFromDate` se izračunava iz `awardedOn` i `promotionTiming`: `AFTER_TRAINING` → sljedeći dan,
          *     `BEFORE_TRAINING` → isti dan. Za povijesni unos bez poznatog datuma dodjele (`awardedOn: null`) obvezan je
-         *     `effectiveFromDate`. Isti efektivni datum kao postojeći → `409 BELT_DUPLICATE_EFFECTIVE_DATE`;
+         *     `effectiveFromDate`; bijeli pojas bez oba datuma broji se od datuma učlanjenja člana. Isti efektivni datum kao postojeći → `409 BELT_DUPLICATE_EFFECTIVE_DATE`;
          *     neispravan kronološki slijed → `422 BELT_CHRONOLOGY_INVALID`: poredano po `effectiveFromDate` svaki je pojas
          *     strogo viši od prethodnog, a poznati datumi dodjele idu istim redom (raniji niži pojas smije se naknadno
          *     unijeti). Datum dodjele u budućnosti → `400`. Istodobni unosi za istog člana serijaliziraju se i cijela se
@@ -1196,7 +1196,7 @@ export interface components {
             promotionTiming: components["schemas"]["PromotionTiming"];
             /**
              * Format: date
-             * @description Obvezno ako je `awardedOn` null; inače se ignorira (izračunava se).
+             * @description Obvezno ako je `awardedOn` null, osim za bijeli pojas, koji se tada broji od datuma učlanjenja (`joinedOn`); uz poznat `awardedOn` se ignorira (izračunava se).
              */
             effectiveFromDate?: string;
             awardedByUserId?: components["schemas"]["UserId"] | null;
@@ -1954,7 +1954,7 @@ export interface operations {
                      * @example {
                      *       "application": "TapIn",
                      *       "version": "0.1.0",
-                     *       "clubName": "BJJ klub",
+                     *       "clubName": "BD Samobor",
                      *       "timeZone": "Europe/Zagreb",
                      *       "serverTime": "2026-10-20T14:00:00Z"
                      *     }

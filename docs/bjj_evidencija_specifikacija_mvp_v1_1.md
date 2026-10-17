@@ -8,7 +8,7 @@
 
 ## 1. Cilj, korisnici i opseg
 
-Aplikacija omogućuje članovima BJJ kluba prijavu na trening, a trenerima evidenciju stvarnih dolazaka. Sustav automatski vodi statistiku i šalje e-mail obavijesti relevantnim članovima.
+Aplikacija omogućuje članovima BD Samobora prijavu na trening, a trenerima evidenciju stvarnih dolazaka. Sustav automatski vodi statistiku i šalje e-mail obavijesti relevantnim članovima.
 
 Početni opseg: **1 klub, oko 20 članova i 3 trenera, najmanje godinu dana korištenja**. Samo jedna grupa, bez maksimalnog broja mjesta i bez paralelnih termina treninga. Treninzi su **utorkom i četvrtkom 18:30–20:00**, uz mogućnost iznimki i dodatnih treninga. Jedan trening mogu voditi dva ili više trenera.
 

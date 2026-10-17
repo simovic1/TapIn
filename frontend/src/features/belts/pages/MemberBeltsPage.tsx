@@ -37,7 +37,9 @@ export function MemberBeltsPage() {
       </p>
       <PageHeader title={`Pojasevi: ${name}`} description="Datum dodjele i početak brojanja treninga vode se odvojeno." />
       <QueryState query={history} loadingLabel="Učitavanje pojaseva…">
-        {(data) => <Management membershipId={membershipId} history={data} onReload={() => history.refetch()} />}
+        {(data) => (
+          <Management membershipId={membershipId} history={data} memberSince={member.data?.joinedOn} onReload={() => history.refetch()} />
+        )}
       </QueryState>
     </section>
   );
@@ -46,10 +48,27 @@ export function MemberBeltsPage() {
 function toRequest(v: BeltFormValues) {
   return v.awardedKnown
     ? { belt: v.belt, awardedOn: v.awardedOn, promotionTiming: v.timing, note: v.note.trim() || null }
-    : { belt: v.belt, awardedOn: null, promotionTiming: v.timing, effectiveFromDate: v.effectiveFromDate, note: v.note.trim() || null };
+    : {
+        belt: v.belt,
+        awardedOn: null,
+        promotionTiming: v.timing,
+        // empty for a white belt: the server counts it from the join date
+        effectiveFromDate: v.effectiveFromDate || undefined,
+        note: v.note.trim() || null,
+      };
 }
 
-function Management({ membershipId, history, onReload }: { membershipId: number; history: BeltHistory; onReload: () => void }) {
+function Management({
+  membershipId,
+  history,
+  memberSince,
+  onReload,
+}: {
+  membershipId: number;
+  history: BeltHistory;
+  memberSince?: string;
+  onReload: () => void;
+}) {
   const saved = useBeltSaved(membershipId);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<{ period: BeltPeriod; initial: BeltFormValues; key: number }>();
@@ -117,6 +136,7 @@ function Management({ membershipId, history, onReload }: { membershipId: number;
           title={nextBelt(history.currentBelt)}
           initial={emptyValues()}
           correction={false}
+          memberSince={memberSince}
           submitLabel="Spremi pojas"
           onSubmit={(v) => createBeltPeriod(membershipId, toRequest(v))}
           onDone={(result) => {

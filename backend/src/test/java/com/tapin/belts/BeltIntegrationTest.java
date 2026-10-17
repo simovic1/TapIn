@@ -130,18 +130,37 @@ class BeltIntegrationTest {
     @Test
     void unknownAwardDateIsKeptUnknownAndNeedsAStartOfCounting() throws Exception {
         Map<String, Object> missing = new HashMap<>();
-        missing.put("belt", "WHITE");
+        missing.put("belt", "BLUE");
         missing.put("awardedOn", null);
         create(trainer, ana, missing)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors.effectiveFromDate").exists());
 
-        missing.put("effectiveFromDate", "2024-03-01");
+        missing.put("effectiveFromDate", "2025-03-01");
         create(trainer, ana, missing)
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.beltPeriod.awardedOn").isEmpty())
-                .andExpect(jsonPath("$.beltPeriod.effectiveFromDate").value("2024-03-01"))
+                .andExpect(jsonPath("$.beltPeriod.effectiveFromDate").value("2025-03-01"))
                 .andExpect(jsonPath("$.history.currentBeltAwardedOn").isEmpty());
+    }
+
+    @Test
+    void whiteBeltWithoutDatesCountsFromTheJoinDate() throws Exception {
+        jdbc.update("UPDATE club_memberships SET joined_on = DATE '2025-09-01' WHERE id = ?", ana);
+        Map<String, Object> white = new HashMap<>();
+        white.put("belt", "WHITE");
+        white.put("awardedOn", null);
+        create(trainer, ana, white)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.beltPeriod.awardedOn").isEmpty())
+                .andExpect(jsonPath("$.beltPeriod.effectiveFromDate").value("2025-09-01"));
+
+        // An explicit start still wins.
+        long other = users.active("ivo@klub.hr", "MEMBER").membershipId();
+        white.put("effectiveFromDate", "2025-10-01");
+        create(trainer, other, white)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.beltPeriod.effectiveFromDate").value("2025-10-01"));
     }
 
     @Test

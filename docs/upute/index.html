@@ -63,7 +63,7 @@ h2.chapter::before { content: ""; width: 14px; height: 36px; background: var(--r
 .step li { margin-bottom: 6px; }
 .shots { display: flex; flex-direction: column; gap: 16px; }
 figure { margin: 0; }
-figure img { display: block; width: 100%; max-width: 280px; border-radius: 22px; border: 6px solid var(--phone-edge); background: #fff; }
+figure img { display: block; width: 100%; max-width: 280px; height: auto; border-radius: 22px; border: 6px solid var(--phone-edge); background: #fff; }
 figcaption { font-size: 14px; color: var(--muted); margin-top: 6px; max-width: 280px; }
 .ui { font-weight: 600; white-space: nowrap; }
 .tip { background: var(--tip-bg); border-left: 4px solid var(--red); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 4px 0 12px; max-width: 62ch; }
@@ -374,7 +374,7 @@ footer { padding-block: 48px; color: var(--muted); font-size: 14px; }
       <p>Na profilu člana otvorite <span class="ui">Povijest pojaseva, promocije i ispravci</span>. Vidite trenutačni pojas, datum dodjele i broj treninga u svakom pojasu.</p>
       <ul>
         <li><span class="ui">Nova promocija</span>: odaberite pojas i stvarni datum polaganja. Kod <em>Nakon treninga</em> trening toga dana ostaje u starom pojasu, a novi se broji od sljedećeg dana. Kod <em>Prije treninga</em> se već taj trening broji u novi pojas.</li>
-        <li>Stariji pojas bez poznatog datuma unosi se s kvačicom <span class="ui">Datum dodjele nije poznat</span>; aplikacija ne izmišlja datum.</li>
+        <li>Stariji pojas bez poznatog datuma unosi se s kvačicom <span class="ui">Datum dodjele nije poznat</span>; aplikacija ne izmišlja datum. Za početni <strong>bijeli pojas</strong> polje <span class="ui">Treninzi se broje od</span> možete ostaviti prazno: treninzi se tada broje od datuma učlanjenja.</li>
         <li>Pojas se ne briše: pogrešan unos ispravite gumbom <span class="ui">Ispravi</span>, uz obavezan razlog. Ispravci su vidljivi u povijesti.</li>
       </ul>
       <p>Treninzi se po pojasevima raspoređuju sami prema datumima, pa ispravak datuma ili dolaska odmah mijenja i brojeve.</p>

@@ -146,7 +146,7 @@ describe('belt management', () => {
   it('enters an older belt without inventing its award date', async () => {
     const fetch = mockApi({
       'GET /api/v1/me': staff,
-      'GET /api/v1/members/5': () => json(200, member),
+      'GET /api/v1/members/5': () => json(200, { ...member, joinedOn: '2025-09-01' }),
       'GET /api/v1/members/5/belts': () => json(200, { ...history, currentBelt: 'UNKNOWN', currentBeltTrainings: 0, periods: [], unassignedTrainings: 43 }),
       'GET /api/v1/members/5/belts/audit': () => json(200, { items: [], page: { page: 0, size: 50, totalElements: 0, totalPages: 0 } }),
       'POST /api/v1/members/5/belts': () => json(201, { beltPeriod: white, history }),
@@ -156,13 +156,39 @@ describe('belt management', () => {
     await user.click(await screen.findByRole('button', { name: 'Početni unos pojasa' }));
     const form = screen.getByRole('form', { name: 'Početni unos pojasa' });
     await user.click(within(form).getByRole('checkbox', { name: /Datum dodjele nije poznat/ }));
+
+    // Any belt but white needs the start of counting.
+    await user.selectOptions(within(form).getByLabelText('Pojas'), 'BLUE');
     await user.click(within(form).getByRole('button', { name: 'Spremi pojas' }));
     expect(await within(form).findByText('Unesite od kada se treninzi broje u ovaj pojas.')).toBeInTheDocument();
 
     await user.type(within(form).getByLabelText(/Treninzi se broje od/), '2024-03-01');
     await user.click(within(form).getByRole('button', { name: 'Spremi pojas' }));
     expect(await screen.findByText('Bijeli pojas je spremljen.')).toBeInTheDocument();
-    expect(body(fetch, 'POST')).toMatchObject({ belt: 'WHITE', awardedOn: null, effectiveFromDate: '2024-03-01' });
+    expect(body(fetch, 'POST')).toMatchObject({ belt: 'BLUE', awardedOn: null, effectiveFromDate: '2024-03-01' });
+  });
+
+  it('counts a white belt without dates from the join date', async () => {
+    const fetch = mockApi({
+      'GET /api/v1/me': staff,
+      'GET /api/v1/members/5': () => json(200, { ...member, joinedOn: '2025-09-01' }),
+      'GET /api/v1/members/5/belts': () => json(200, { ...history, currentBelt: 'UNKNOWN', currentBeltTrainings: 0, periods: [], unassignedTrainings: 43 }),
+      'GET /api/v1/members/5/belts/audit': () => json(200, { items: [], page: { page: 0, size: 50, totalElements: 0, totalPages: 0 } }),
+      'POST /api/v1/members/5/belts': () => json(201, { beltPeriod: white, history }),
+    });
+    renderApp('/clanovi/5/pojasevi');
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'Početni unos pojasa' }));
+    const form = screen.getByRole('form', { name: 'Početni unos pojasa' });
+    await user.click(within(form).getByRole('checkbox', { name: /Datum dodjele nije poznat/ }));
+
+    expect(within(form).getByText(/Ako ostavite prazno, bijeli pojas broji se od datuma učlanjenja \(1\. rujna 2025\.\)/)).toBeInTheDocument();
+    expect(within(form).getByText(/Početak brojanja treninga/)).toHaveTextContent('1. rujna 2025. (datum učlanjenja)');
+    await user.click(within(form).getByRole('button', { name: 'Spremi pojas' }));
+    expect(await screen.findByText('Bijeli pojas je spremljen.')).toBeInTheDocument();
+    const sent = body(fetch, 'POST');
+    expect(sent).toMatchObject({ belt: 'WHITE', awardedOn: null });
+    expect(sent).not.toHaveProperty('effectiveFromDate');
   });
 
   it('asks for a reason and decides again on fresh data after a 409', async () => {

@@ -167,7 +167,7 @@ class OutboxIntegrationTest {
         long userId = tx.execute(status -> insertUser("ana@example.com"));
         long id = tx.execute(status -> {
             outbox.enqueue(new OutboxMessage(EmailEventType.INVITATION, userId, "ana@example.com", null,
-                    Map.of("firstName", "Ana", "clubName", "BJJ klub", "invitationUrl", "https://x/pozivnica/SECRET",
+                    Map.of("firstName", "Ana", "clubName", "BD Samobor", "invitationUrl", "https://x/pozivnica/SECRET",
                             "expiresAt", "27. 10. 2026."), "INVITATION:inv-1", true));
             return jdbc.queryForObject("SELECT id FROM email_outbox", Long.class);
         });

@@ -74,6 +74,12 @@ public class MembershipDirectory {
                 .toList();
     }
 
+    /** Membership start date ({@code joined_on}), e.g. the default start of an initial white belt. */
+    @Transactional(readOnly = true)
+    public java.util.Optional<java.time.LocalDate> joinedOn(long membershipId) {
+        return memberships.findById(membershipId).map(ClubMembership::getJoinedOn);
+    }
+
     /** @return memberships by id in the order requested; unknown ids are absent from the map */
     @Transactional(readOnly = true)
     public Map<Long, MemberRef> findAll(Collection<Long> membershipIds) {
