@@ -21,6 +21,7 @@ export function makeUser(roles: Role[], overrides: Partial<CurrentUser> = {}): C
     club: { name: 'BD Samobor', timeZone: 'Europe/Zagreb' },
     version: 1,
     trainingRemindersEnabled: true,
+    webPushPublicKey: null,
     ...overrides,
   };
 }
@@ -41,7 +42,7 @@ export function mockApi(handlers: Record<string, Handler>) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = String(input);
     const key = `${(init.method ?? 'GET').toUpperCase()} ${url.replace(/\?.*$/, '')}`;
-    const handler = handlers[key];
+    const handler = handlers[key] ?? (key === 'GET /api/v1/me/notifications' ? () => json(200, { items: [], unreadCount: 0 }) : undefined);
     if (!handler) throw new Error(`Unexpected request: ${key}`);
     return handler(url, init);
   });

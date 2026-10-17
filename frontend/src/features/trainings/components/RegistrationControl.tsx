@@ -62,7 +62,7 @@ export function RegistrationControl({ training, size = 'large' }: { training: Tr
           fullWidth={size === 'large'}
           loading={register.isPending}
           disabled={busy}
-          onClick={() => run(register, (r) => (r.changed ? 'Prijavljeni ste. Potvrda je u redu za slanje e-mailom.' : 'Već ste prijavljeni.'))}
+          onClick={() => run(register, (r) => (r.changed ? 'Prijavljeni ste. Potvrda je u obavijestima.' : 'Već ste prijavljeni.'))}
         >
           Prijavi se
         </Button>

@@ -82,6 +82,13 @@ tapin:
     enabled: ${REMINDERS_ENABLED:true}
     lead: 3h
     interval: 1m
+  push:
+    # Web push (optional channel for training reminders). Off unless both VAPID keys are set; generate a pair with
+    # `node scripts/generate-vapid-keys.mjs`. The private key is a secret: environment only, never committed.
+    vapid-public-key: ${VAPID_PUBLIC_KEY:}
+    vapid-private-key: ${VAPID_PRIVATE_KEY:}
+    vapid-subject: ${VAPID_SUBJECT:mailto:no-reply@tapin.local}
+    timeout: 10s
   outbox:
     poll-interval: 10s
     batch-size: 20

@@ -186,6 +186,70 @@ export interface paths {
         patch: operations["updateOwnProfile"];
         trace?: never;
     };
+    "/me/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Posljednjih 50 vlastitih obavijesti i ukupan broj nepročitanih */
+        get: operations["getOwnNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/notifications/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Označi vlastitu obavijest pročitanom */
+        put: operations["markOwnNotificationRead"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/push-subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Uključivanje push obavijesti na ovom uređaju
+         * @description Sprema pretplatu preglednika (`PushSubscription.toJSON()`) za prijavljenog korisnika. Pretplata je pristanak
+         *     na push na tom uređaju: podsjetnik 3 sata prije treninga tada stiže i kao push obavijest, neovisno o postavci
+         *     podsjetnika u aplikaciji. Idempotentno – klijent smije poslati istu pretplatu pri svakom pokretanju. Ista adresa
+         *     (`endpoint`) prijavljena za drugog korisnika prelazi na trenutnog (dijeljeni uređaj).
+         *
+         *     `endpoint` mora biti HTTPS adresa poznatog push servisa (FCM, Mozilla, Apple, Windows); ostalo → `400`.
+         *     Bez VAPID ključeva na poslužitelju (`webPushPublicKey` je `null`) → `422`.
+         */
+        put: operations["saveOwnPushSubscription"];
+        post?: never;
+        /**
+         * Isključivanje push obavijesti na ovom uređaju
+         * @description Briše pretplatu s tom adresom ako pripada prijavljenom korisniku. Idempotentno – bez pretplate također `204`.
+         */
+        delete: operations["deleteOwnPushSubscription"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/statistics": {
         parameters: {
             query?: never;
@@ -1052,14 +1116,39 @@ export interface components {
             };
             /** @description Verzija korisničkog profila (za `PATCH /me/profile`). */
             version: components["schemas"]["Version"];
-            /** @description Prima li podsjetnik 3 sata prije treninga na koji je prijavljen (zadano `true`, odluka D-04). */
+            /** @description Prima li podsjetnik u aplikaciji i putem pusha 3 sata prije treninga na koji je prijavljen (zadano `true`, odluka D-04). */
             trainingRemindersEnabled: boolean;
+            /**
+             * @description VAPID ključ poslužitelja (base64url) za `PushManager.subscribe({ applicationServerKey })`. `null` kad web
+             *     push nije uključen na poslužitelju – sučelje tada ne nudi push obavijesti.
+             */
+            webPushPublicKey: string | null;
+        };
+        PushSubscriptionEndpoint: {
+            /**
+             * Format: uri
+             * @description Adresa pretplate kod push servisa (HTTPS).
+             */
+            endpoint: string;
+        };
+        /** @description Oblik `PushSubscription.toJSON()` iz preglednika. */
+        PushSubscriptionRequest: {
+            /** Format: uri */
+            endpoint: string;
+            /** @description Ignorira se. */
+            expirationTime?: number | null;
+            keys: {
+                /** @description P-256 javni ključ preglednika (base64url, 65 bajtova). */
+                p256dh: string;
+                /** @description Tajna za autentikaciju (base64url, 16 bajtova). */
+                auth: string;
+            };
         };
         /** @description Izostavljeno polje ostaje nepromijenjeno; `phone` s vrijednošću null briše telefon. */
         UpdateOwnProfileRequest: {
             expectedVersion: components["schemas"]["ExpectedVersion"];
             phone?: components["schemas"]["Phone"] | null;
-            /** @description Uključuje ili isključuje podsjetnik 3 sata prije treninga. */
+            /** @description Uključuje ili isključuje podsjetnik u aplikaciji i putem pusha 3 sata prije treninga (push se uključuje po uređaju, `/me/push-subscription`). */
             trainingRemindersEnabled?: boolean;
         };
         MemberSummary: {
@@ -1641,17 +1730,24 @@ export interface components {
             page: components["schemas"]["PageMetadata"];
         };
         /**
-         * @description `PENDING` – u redu za slanje ili čeka ponovni pokušaj; `SENT` – **prihvaćeno od providera** (ne potvrda
+         * @description `SKIPPED` – nema aktivne push pretplate; obavijest ostaje u aplikaciji, nije poslana niti neuspjela.
+         *     `PENDING` – u redu za slanje ili čeka ponovni pokušaj; `SENT` – **prihvaćeno od providera** (ne potvrda
          *     dostave); `FAILED` – trajna greška, iscrpljeni pokušaji, istekla ili povučena poruka.
          * @enum {string}
          */
-        OutboxStatus: "PENDING" | "SENT" | "FAILED";
+        OutboxStatus: "PENDING" | "SENT" | "FAILED" | "SKIPPED";
         /** @enum {string} */
         OutboxEventType: "INVITATION" | "REGISTRATION_CONFIRMED" | "REGISTRATION_CANCELLED" | "TRAINING_REMINDER" | "TRAINING_CANCELLED" | "TRAINING_RESCHEDULED" | "ATTENDANCE_RECORDED" | "PASSWORD_RESET";
+        /**
+         * @description `EMAIL` – e-mail na `recipientEmail`; `PUSH` – web push na sve pretplate primatelja (`acceptedByProviderAt` = prihvatio barem jedan push servis).
+         * @enum {string}
+         */
+        OutboxChannel: "EMAIL" | "PUSH";
         OutboxItem: {
             /** Format: int64 */
             outboxId: number;
             eventType: components["schemas"]["OutboxEventType"];
+            channel: components["schemas"]["OutboxChannel"];
             status: components["schemas"]["OutboxStatus"];
             recipientUserId: components["schemas"]["UserId"];
             /** Format: email */
@@ -1692,6 +1788,7 @@ export interface components {
             checkedAt: string;
             counts: {
                 PENDING: number;
+                SKIPPED: number;
                 SENT: number;
                 FAILED: number;
             };
@@ -2170,6 +2267,112 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    getOwnNotifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Obavijesti, neovisno o ishodu push dostave */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        unreadCount: number;
+                        items: {
+                            /** Format: int64 */
+                            id: number;
+                            title: string;
+                            body: string;
+                            url: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            read: boolean;
+                        }[];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    markOwnNotificationRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pročitano; tuđi ili nepostojeći ID ne mijenja ništa */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    saveOwnPushSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushSubscriptionRequest"];
+            };
+        };
+        responses: {
+            /** @description Pretplata spremljena */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["UnprocessableContent"];
+        };
+    };
+    deleteOwnPushSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushSubscriptionEndpoint"];
+            };
+        };
+        responses: {
+            /** @description Pretplata obrisana (ili nije postojala) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     getOwnStatistics: {

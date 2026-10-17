@@ -66,7 +66,23 @@ export function useAcceptInvitation() {
 export function useLogout() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => apiFetch<void>('/auth/logout', { method: 'POST' }),
+    mutationFn: async () => {
+      try {
+        if ('serviceWorker' in navigator) {
+          const registration = await navigator.serviceWorker.getRegistration();
+          const subscription = await registration?.pushManager?.getSubscription();
+          if (subscription) {
+            try {
+              await apiFetch('/me/push-subscription', { method: 'DELETE', body: JSON.stringify({ endpoint: subscription.endpoint }) });
+            } finally {
+              await subscription.unsubscribe();
+            }
+          }
+        }
+      } finally {
+        await apiFetch<void>('/auth/logout', { method: 'POST' });
+      }
+    },
     meta: { ignoreUnauthorized: true },
     onSettled: () => {
       queryClient.clear();

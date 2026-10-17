@@ -72,7 +72,7 @@ class EmailTemplateRenderer {
         return new Rendered(fill(template.subject(), payload, type), fill(template.body(), payload, type) + FOOTER);
     }
 
-    private static String fill(String text, Map<String, Object> payload, EmailEventType type) {
+    static String fill(String text, Map<String, Object> payload, EmailEventType type) {
         Matcher matcher = PLACEHOLDER.matcher(text);
         StringBuilder out = new StringBuilder();
         while (matcher.find()) {

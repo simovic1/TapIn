@@ -1,6 +1,8 @@
 {
   "name": "TapIn – evidencija treninga",
   "short_name": "TapIn",
+  "id": "/",
+  "description": "Raspored treninga, prijave i evidencija članstva u klubu.",
   "lang": "hr",
   "start_url": "/",
   "scope": "/",

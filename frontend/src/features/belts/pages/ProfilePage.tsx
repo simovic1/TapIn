@@ -66,7 +66,7 @@ function ReminderSetting({ user, onSaved }: { user: CurrentUser; onSaved: (value
     <label className="flex min-h-11 items-center gap-3">
       <input type="checkbox" className="size-5" checked={user.trainingRemindersEnabled} disabled={save.isPending}
         onChange={e => save.mutate(e.target.checked)} />
-      <span>Podsjetnik e-mailom 3 sata prije treninga na koji sam prijavljen/a</span>
+      <span>Podsjetnik u aplikaciji i putem pusha 3 sata prije treninga na koji sam prijavljen/a</span>
     </label>
     <p className="text-sm text-slate-600 dark:text-slate-400">Potvrde prijave, obavijesti o otkazanim i pomaknutim treninzima i evidenciji dolazaka stižu i dalje.</p>
     {save.isPending && <p role="status" className="text-sm">Spremanje…</p>}

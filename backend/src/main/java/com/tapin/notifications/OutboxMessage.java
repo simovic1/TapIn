@@ -14,6 +14,8 @@ import java.util.Objects;
  *                         be JSON-serialisable.
  * @param containsSecret   true for messages carrying one-time links (invitation, password reset): the payload is
  *                         wiped once the row is SENT or FAILED.
+ * @param channel          {@link OutboxChannel#EMAIL} (default) or {@link OutboxChannel#PUSH} - a push message goes to
+ *                         all push subscriptions of {@code recipientUserId} and needs its own deduplication key.
  */
 public record OutboxMessage(
         EmailEventType eventType,
@@ -23,7 +25,8 @@ public record OutboxMessage(
         Map<String, Object> payload,
         String deduplicationKey,
         boolean containsSecret,
-        Instant expiresAt) {
+        Instant expiresAt,
+        OutboxChannel channel) {
 
     public static final int MAX_DEDUPLICATION_KEY_LENGTH = 255;
 
@@ -35,18 +38,20 @@ public record OutboxMessage(
             throw new IllegalArgumentException("deduplicationKey must be 1-" + MAX_DEDUPLICATION_KEY_LENGTH + " chars");
         }
         payload = payload == null ? Map.of() : Map.copyOf(payload);
+        channel = channel == null ? OutboxChannel.EMAIL : channel;
     }
 
     /** Without expiry. */
     public OutboxMessage(EmailEventType eventType, long recipientUserId, String recipientEmail, Long sessionId,
                          Map<String, Object> payload, String deduplicationKey, boolean containsSecret) {
-        this(eventType, recipientUserId, recipientEmail, sessionId, payload, deduplicationKey, containsSecret, null);
+        this(eventType, recipientUserId, recipientEmail, sessionId, payload, deduplicationKey, containsSecret, null,
+                OutboxChannel.EMAIL);
     }
 
     /** Not delivered after {@code instant} (stale, e.g. a reminder once the training started); FAILED instead. */
     public OutboxMessage expiresAt(Instant instant) {
         return new OutboxMessage(eventType, recipientUserId, recipientEmail, sessionId, payload, deduplicationKey,
-                containsSecret, instant);
+                containsSecret, instant, channel);
     }
 
     public static OutboxMessage of(EmailEventType type, long recipientUserId, String recipientEmail,
@@ -56,11 +61,23 @@ public record OutboxMessage(
 
     public OutboxMessage forSession(long sessionId) {
         return new OutboxMessage(eventType, recipientUserId, recipientEmail, sessionId, payload, deduplicationKey,
-                containsSecret, expiresAt);
+                containsSecret, expiresAt, channel);
     }
 
     public OutboxMessage withSecret() {
         return new OutboxMessage(eventType, recipientUserId, recipientEmail, sessionId, payload, deduplicationKey, true,
-                expiresAt);
+                expiresAt, channel);
+    }
+
+    /**
+     * The same notification as web push under {@code pushDeduplicationKey} (the e-mail and the push of one business
+     * event are two outbox rows). Push messages never carry secrets.
+     */
+    public OutboxMessage viaPush(String pushDeduplicationKey) {
+        if (containsSecret) {
+            throw new IllegalStateException("Messages with secret links are e-mail only");
+        }
+        return new OutboxMessage(eventType, recipientUserId, recipientEmail, sessionId, payload, pushDeduplicationKey,
+                false, expiresAt, OutboxChannel.PUSH);
     }
 }

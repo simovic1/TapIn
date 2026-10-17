@@ -66,6 +66,8 @@ class OutboxOperationsIntegrationTest {
             "SMTP server unreachable: auth user=tapin password=hunter2 while sending " + SECRET_LINK, false);
 
     @MockitoBean AuthRequestLimiter requestLimiter;
+    @MockitoBean PushDelivery pushDelivery;
+    @Autowired EmailTemplateRenderer emailRenderer;
 
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
@@ -93,6 +95,13 @@ class OutboxOperationsIntegrationTest {
         clock.set(Instant.parse("2026-10-20T17:00:00Z"));
         provider = (ScriptedEmailSender) sender;
         provider.reset();
+        org.mockito.Mockito.when(pushDelivery.deliver(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> {
+                    OutboxEntry entry = invocation.getArgument(0);
+                    var rendered = emailRenderer.render(entry.eventType(), entry.payload());
+                    return provider.send(new com.tapin.notifications.email.EmailMessage(entry.recipientEmail(),
+                            rendered.subject(), rendered.body(), "test", entry.deduplicationKey()));
+                });
         TestUsers users = new TestUsers(jdbc, passwordEncoder);
         TestUsers.Created anaCreated = users.active("ana@klub.hr", "MEMBER");
         ana = anaCreated.membershipId();
@@ -131,7 +140,7 @@ class OutboxOperationsIntegrationTest {
         assertThat(attendanceMail.get("nextAttemptAt").isNull()).isFalse();
         assertThat(attendanceMail.get("acceptedByProviderAt").isNull()).isTrue();
         assertThat(attendanceMail.get("lastError").asString())
-                .startsWith("[scripted] SMTP server unreachable").contains("password=***", "https://tapin.test/***");
+                .startsWith("[push] SMTP server unreachable").contains("password=***", "https://tapin.test/***");
         assertNoSecrets(overview.toString());
         assertThat(jdbc.queryForObject("SELECT last_error FROM email_outbox WHERE id = ?", String.class, secret))
                 .doesNotContain("hunter2", "Zx81secret");

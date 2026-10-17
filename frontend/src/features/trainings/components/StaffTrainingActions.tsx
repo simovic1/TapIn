@@ -92,7 +92,7 @@ export function StaffTrainingActions({ training, onReload }: { training: Trainin
           </dl>
           <ul className="list-disc pl-5 text-sm">
             {training.scheduleId && <li>Tjedni raspored ostaje – ostali termini održavaju se normalno.</li>}
-            <li>Prijavljeni članovi dobit će obavijest e-mailom.</li>
+            <li>Prijavljeni članovi dobit će obavijest u aplikaciji i putem pusha.</li>
             <li>Prijave i povijest termina se ne brišu; otkazani trening ne ulazi u statistiku.</li>
           </ul>
           <TextArea label="Razlog (neobvezno)" value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} hint="Članovi će vidjeti razlog uz otkazani termin." />

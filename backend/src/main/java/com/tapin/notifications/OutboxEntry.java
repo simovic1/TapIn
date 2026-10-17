@@ -20,5 +20,6 @@ record OutboxEntry(
         String lockedBy,
         Instant lockedUntil,
         Instant sentAt,
-        Instant expiresAt) {
+        Instant expiresAt,
+        OutboxChannel channel) {
 }

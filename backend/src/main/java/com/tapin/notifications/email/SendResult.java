@@ -3,6 +3,11 @@ package com.tapin.notifications.email;
 /** Result of one delivery attempt, classified so the worker can decide between SENT, retry and FAILED. */
 public sealed interface SendResult {
 
+    /** No delivery target remains. Keep the inbox entry without reporting a delivery or a failure. */
+    record Skipped(String reason) implements SendResult {
+    }
+
+
     /** The provider accepted the message. */
     record Accepted(String providerMessageId) implements SendResult {
     }

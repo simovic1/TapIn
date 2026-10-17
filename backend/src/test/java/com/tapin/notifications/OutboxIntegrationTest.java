@@ -187,12 +187,12 @@ class OutboxIntegrationTest {
     void messageThatCannotBeRenderedFailsPermanently() {
         long userId = tx.execute(status -> insertUser("ana@example.com"));
         tx.executeWithoutResult(status -> outbox.enqueue(
-                OutboxMessage.of(EmailEventType.TRAINING_CANCELLED, userId, "ana@example.com", Map.of(), "k-broken")));
+                OutboxMessage.of(EmailEventType.PASSWORD_RESET, userId, "ana@example.com", Map.of(), "k-broken")));
 
         processor.processDue(T0);
 
         assertThat(jdbc.queryForObject("SELECT status FROM email_outbox", String.class)).isEqualTo("FAILED");
-        assertThat(jdbc.queryForObject("SELECT last_error FROM email_outbox", String.class)).contains("trainingTime");
+        assertThat(jdbc.queryForObject("SELECT last_error FROM email_outbox", String.class)).contains("firstName");
         assertThat(sender.sent).isEmpty();
     }
 
@@ -303,8 +303,8 @@ class OutboxIntegrationTest {
     }
 
     private static OutboxMessage message(long userId, String key) {
-        return OutboxMessage.of(EmailEventType.REGISTRATION_CONFIRMED, userId, "ana@example.com",
-                Map.of("firstName", "Ana", "trainingTime", "utorak 20. 10. 2026. u 18:30"), key);
+        return OutboxMessage.of(EmailEventType.PASSWORD_RESET, userId, "ana@example.com",
+                Map.of("firstName", "Ana", "resetUrl", "https://tapin.test/reset", "expiresAt", "sutra"), key);
     }
 
     private long insertUser(String email) {

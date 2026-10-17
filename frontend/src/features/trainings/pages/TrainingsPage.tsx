@@ -43,8 +43,20 @@ export function TrainingsPage() {
     to: clubDateTimeToIso(`${shiftMonth(month, 1)}-01`, '00:00')!,
   };
   const trainings = useTrainings(range);
-  const goTo = (target: string) =>
-    setParams(target === currentMonth ? {} : { mjesec: target }, { preventScrollReset: true });
+  const showHeld = params.get('odrzani') === '1';
+  const visibleTrainings = (items: TrainingSummary[]) => items.filter((t) => showHeld || t.status !== 'HELD');
+  const goTo = (target: string) => {
+    const next = new URLSearchParams(params);
+    if (target === currentMonth) next.delete('mjesec');
+    else next.set('mjesec', target);
+    setParams(next, { preventScrollReset: true });
+  };
+  const toggleHeld = (checked: boolean) => {
+    const next = new URLSearchParams(params);
+    if (checked) next.set('odrzani', '1');
+    else next.delete('odrzani');
+    setParams(next, { preventScrollReset: true });
+  };
 
   return (
     <section>
@@ -90,15 +102,20 @@ export function TrainingsPage() {
         </Button>
       </nav>
 
+      <label className="mb-4 flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium">
+        <input type="checkbox" checked={showHeld} onChange={(event) => toggleHeld(event.target.checked)} className="size-4 accent-dragon-600" />
+        Prikaži održane treninge
+      </label>
+
       <QueryState
         query={trainings}
         loadingLabel="Učitavanje rasporeda…"
-        isEmpty={(items) => items.length === 0}
-        empty={{ title: 'Nema treninga u ovom mjesecu', description: 'Odaberite drugi mjesec ili provjerite kasnije.' }}
+        isEmpty={(items) => visibleTrainings(items).length === 0}
+        empty={{ title: 'Nema treninga za odabrani prikaz', description: showHeld ? 'Odaberite drugi mjesec ili provjerite kasnije.' : 'Uključite prikaz održanih treninga ili odaberite drugi mjesec.' }}
       >
         {(items) => (
           <ol className="flex flex-col gap-5" aria-busy={trainings.isFetching || undefined}>
-            {byLocalDate(items).map(([day, list]) => {
+            {byLocalDate(visibleTrainings(items)).map(([day, list]) => {
               const isToday = day === today;
               const past = day < today;
               return (

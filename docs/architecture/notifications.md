@@ -1,3 +1,17 @@
+# Obavijesti u aplikaciji i Web Push
+
+Bez aktivne push pretplate (ili kada su sve istekle), dostava završava kao `SKIPPED`. To nije greška ni potvrda slanja: nema retryja ni e-mail zamjene, a obavijest ostaje u zvoncu. Migracija V016 ispravlja ranije takve `FAILED` zapise bez ponovnog slanja. Korisnik uključuje push preko zvonca na svakom uređaju.
+
+Obavijesti o prijavama, promjenama termina, otkazivanju, prisutnosti i podsjetnicima koriste isključivo `PUSH` kanal. E-mail ostaje samo za pozivnice i reset lozinke. Nema povratka na e-mail kada push nije dopušten ili dostava ne uspije.
+
+Zvonce uz ime korisnika dohvaća posljednjih 50 vlastitih obavijesti (`GET /me/notifications`) i ukupan broj nepročitanih. `PUT /me/notifications/{id}/read` idempotentno označava samo vlastitu obavijest. Podaci ostaju dostupni neovisno o push pretplati i ishodu dostave. Header se osvježava svakih 30 sekundi, pri fokusu i primitku poruke service workera.
+
+Migracija V015 dodaje `read_at` i prebacuje postojeće PENDING poslovne e-mail poruke na push. Povijest već poslanih e-mailova ne šalje se ponovno. Podsjetnik u profilu upravlja podsjetnicima u aplikaciji i pushom; pretplata na uređaju upravlja samo dostavom izvan aplikacije.
+
+Push se uključuje iz zvonca nakon korisnikova klika i dopuštenja preglednika. Potrebni su HTTPS (ili localhost), service worker i VAPID ključevi. Generiranje: `node scripts/generate-vapid-keys.mjs`; postaviti `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` i `VAPID_SUBJECT` u okruženju backenda. Privatni ključ ne objavljivati. Na iOS-u aplikaciju dodati na početni zaslon. Odjava uklanja pretplatu ovog uređaja; sljedeći korisnik mora uključiti push.
+
+Slijedi opis zajedničkog outbox workera i izvornih e-mail predložaka. Pravila kanala iznad imaju prednost nad ranijim opisima poslovnih e-mailova.
+
 # E-mail obavijesti: transactional outbox i worker
 
 Modul `notifications` (spec §8.3, AC-15). Tablica `email_outbox` (migracija `V004`).

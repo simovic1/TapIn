@@ -129,7 +129,7 @@ describe('calendar', () => {
     });
     renderApp('/treninzi');
     const user = userEvent.setup();
-    expect(await screen.findByText('Nema treninga u ovom mjesecu')).toBeInTheDocument();
+    expect(await screen.findByText('Nema treninga za odabrani prikaz')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Prethodni mjesec' }));
     expect(await screen.findByRole('heading', { name: /rujan 2026/i })).toBeInTheDocument();
     await waitFor(() =>
@@ -137,6 +137,25 @@ describe('calendar', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Ovaj mjesec' }));
     expect(await screen.findByRole('heading', { name: /listopad 2026/i })).toBeInTheDocument();
+  });
+
+  it('toggles held trainings and preserves the filter when changing month', async () => {
+    mockApi({
+      'GET /api/v1/me': () => json(200, makeUser(['MEMBER'])),
+      'GET /api/v1/trainings': () => json(200, { items: [training({ status: 'HELD' }), thursday] }),
+    });
+    const { router } = renderApp('/treninzi');
+    const toggle = await screen.findByRole('checkbox', { name: 'Prikaži održane treninge' });
+    expect(toggle).not.toBeChecked();
+    expect(screen.queryByText('Održan')).not.toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(toggle);
+    expect(await screen.findByText('Održan')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Sljedeći mjesec' }));
+    expect(toggle).toBeChecked();
+    expect(router.state.location.search).toContain('odrzani=1');
+    await user.click(toggle);
+    expect(screen.queryByText('Održan')).not.toBeInTheDocument();
   });
 
   it('shows staff the registration count and management links', async () => {

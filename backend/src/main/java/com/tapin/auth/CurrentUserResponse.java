@@ -17,7 +17,9 @@ public record CurrentUserResponse(
         LocalDate joinedOn,
         Club club,
         long version,
-        boolean trainingRemindersEnabled) {
+        boolean trainingRemindersEnabled,
+        // VAPID application server key for PushManager.subscribe(); null when web push is not configured.
+        String webPushPublicKey) {
 
     public record Club(String name, String timeZone) {
     }

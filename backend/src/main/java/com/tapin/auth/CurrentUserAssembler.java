@@ -2,6 +2,7 @@ package com.tapin.auth;
 
 import com.tapin.auth.MembershipAuthorityLookup.MembershipAuthority;
 import com.tapin.auth.UserAccountService.UserProfile;
+import com.tapin.notifications.PushSubscriptions;
 import com.tapin.shared.error.ApiException;
 import com.tapin.shared.error.ErrorCode;
 import org.springframework.stereotype.Component;
@@ -14,10 +15,13 @@ class CurrentUserAssembler {
 
     private final UserAccountService userAccounts;
     private final MembershipAuthorityLookup memberships;
+    private final PushSubscriptions pushSubscriptions;
 
-    CurrentUserAssembler(UserAccountService userAccounts, MembershipAuthorityLookup memberships) {
+    CurrentUserAssembler(UserAccountService userAccounts, MembershipAuthorityLookup memberships,
+                         PushSubscriptions pushSubscriptions) {
         this.userAccounts = userAccounts;
         this.memberships = memberships;
+        this.pushSubscriptions = pushSubscriptions;
     }
 
     CurrentUserResponse assemble(AuthenticatedUser user) {
@@ -38,7 +42,8 @@ class CurrentUserAssembler {
                 membership.joinedOn(),
                 new CurrentUserResponse.Club(membership.clubName(), membership.clubTimeZone()),
                 profile.version(),
-                profile.trainingRemindersEnabled());
+                profile.trainingRemindersEnabled(),
+                pushSubscriptions.publicKey().orElse(null));
     }
 
     private static int roleOrder(String role) {

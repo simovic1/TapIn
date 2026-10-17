@@ -88,7 +88,7 @@ tags:
   - name: Reports
     description: Izvještaji i CSV izvoz (§11.5)
   - name: Operations
-    description: Operativni nadzor slanja e-maila – samo ADMIN, bez zasebnog ekrana (§8.3, §13.1, BJJ-30)
+    description: Operativni nadzor slanja e-maila i push obavijesti – samo ADMIN, bez zasebnog ekrana (§8.3, §13.1, BJJ-30)
 
 paths:
   # ------------------------------------------------------------------ System
@@ -325,6 +325,105 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
+
+  /me/notifications:
+    get:
+      tags: [Auth]
+      operationId: getOwnNotifications
+      x-roles: [ANY]
+      summary: Posljednjih 50 vlastitih obavijesti i ukupan broj nepročitanih
+      responses:
+        '200':
+          description: Obavijesti, neovisno o ishodu push dostave
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, unreadCount]
+                properties:
+                  unreadCount:
+                    type: integer
+                    format: int64
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, title, body, url, createdAt, read]
+                      properties:
+                        id: { type: integer, format: int64 }
+                        title: { type: string }
+                        body: { type: string }
+                        url: { type: string }
+                        createdAt: { type: string, format: date-time }
+                        read: { type: boolean }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /me/notifications/{id}/read:
+    put:
+      tags: [Auth]
+      operationId: markOwnNotificationRead
+      x-roles: [ANY]
+      summary: Označi vlastitu obavijest pročitanom
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '204':
+          description: Pročitano; tuđi ili nepostojeći ID ne mijenja ništa
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /me/push-subscription:
+    put:
+      tags: [Auth]
+      operationId: saveOwnPushSubscription
+      summary: Uključivanje push obavijesti na ovom uređaju
+      description: |
+        Sprema pretplatu preglednika (`PushSubscription.toJSON()`) za prijavljenog korisnika. Pretplata je pristanak
+        na push na tom uređaju: podsjetnik 3 sata prije treninga tada stiže i kao push obavijest, neovisno o postavci
+        podsjetnika u aplikaciji. Idempotentno – klijent smije poslati istu pretplatu pri svakom pokretanju. Ista adresa
+        (`endpoint`) prijavljena za drugog korisnika prelazi na trenutnog (dijeljeni uređaj).
+
+        `endpoint` mora biti HTTPS adresa poznatog push servisa (FCM, Mozilla, Apple, Windows); ostalo → `400`.
+        Bez VAPID ključeva na poslužitelju (`webPushPublicKey` je `null`) → `422`.
+      x-spec-addition: true
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      x-roles: [ANY]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PushSubscriptionRequest' }
+      responses:
+        '204': { description: Pretplata spremljena }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+    delete:
+      tags: [Auth]
+      operationId: deleteOwnPushSubscription
+      summary: Isključivanje push obavijesti na ovom uređaju
+      description: Briše pretplatu s tom adresom ako pripada prijavljenom korisniku. Idempotentno – bez pretplate također `204`.
+      x-spec-addition: true
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      x-roles: [ANY]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PushSubscriptionEndpoint' }
+      responses:
+        '204': { description: Pretplata obrisana (ili nije postojala) }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
 
   /me/statistics:
     get:
@@ -1424,6 +1523,7 @@ components:
         club: { name: BD Samobor, timeZone: Europe/Zagreb }
         version: 4
         trainingRemindersEnabled: true
+        webPushPublicKey: BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U
     CurrentUserMember:
       summary: Marko Marić (MEMBER)
       value:
@@ -1440,6 +1540,7 @@ components:
         club: { name: BD Samobor, timeZone: Europe/Zagreb }
         version: 4
         trainingRemindersEnabled: true
+        webPushPublicKey: BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U
     CurrentUserAdmin:
       summary: Iva Kovač (ADMIN, MEMBER)
       value:
@@ -1456,6 +1557,7 @@ components:
         club: { name: BD Samobor, timeZone: Europe/Zagreb }
         version: 4
         trainingRemindersEnabled: true
+        webPushPublicKey: null
 
   responses:
     BadRequest:
@@ -1836,7 +1938,7 @@ components:
         newPassword: { $ref: '#/components/schemas/Password' }
     CurrentUser:
       type: object
-      required: [userId, membershipId, email, firstName, lastName, phone, accountStatus, membershipStatus, roles, joinedOn, club, version, trainingRemindersEnabled]
+      required: [userId, membershipId, email, firstName, lastName, phone, accountStatus, membershipStatus, roles, joinedOn, club, version, trainingRemindersEnabled, webPushPublicKey]
       properties:
         userId: { $ref: '#/components/schemas/UserId' }
         membershipId: { $ref: '#/components/schemas/MembershipId' }
@@ -1863,7 +1965,30 @@ components:
           description: Verzija korisničkog profila (za `PATCH /me/profile`).
         trainingRemindersEnabled:
           type: boolean
-          description: Prima li podsjetnik 3 sata prije treninga na koji je prijavljen (zadano `true`, odluka D-04).
+          description: Prima li podsjetnik u aplikaciji i putem pusha 3 sata prije treninga na koji je prijavljen (zadano `true`, odluka D-04).
+        webPushPublicKey:
+          type: [string, 'null']
+          description: |
+            VAPID ključ poslužitelja (base64url) za `PushManager.subscribe({ applicationServerKey })`. `null` kad web
+            push nije uključen na poslužitelju – sučelje tada ne nudi push obavijesti.
+    PushSubscriptionEndpoint:
+      type: object
+      required: [endpoint]
+      properties:
+        endpoint: { type: string, format: uri, maxLength: 2048, description: 'Adresa pretplate kod push servisa (HTTPS).' }
+    PushSubscriptionRequest:
+      type: object
+      required: [endpoint, keys]
+      description: Oblik `PushSubscription.toJSON()` iz preglednika.
+      properties:
+        endpoint: { type: string, format: uri, maxLength: 2048 }
+        expirationTime: { type: [integer, 'null'], description: Ignorira se. }
+        keys:
+          type: object
+          required: [p256dh, auth]
+          properties:
+            p256dh: { type: string, maxLength: 128, description: 'P-256 javni ključ preglednika (base64url, 65 bajtova).' }
+            auth: { type: string, maxLength: 64, description: 'Tajna za autentikaciju (base64url, 16 bajtova).' }
     UpdateOwnProfileRequest:
       type: object
       additionalProperties: false
@@ -1875,7 +2000,7 @@ components:
         phone: { oneOf: [{ $ref: '#/components/schemas/Phone' }, { type: 'null' }] }
         trainingRemindersEnabled:
           type: boolean
-          description: Uključuje ili isključuje podsjetnik 3 sata prije treninga.
+          description: Uključuje ili isključuje podsjetnik u aplikaciji i putem pusha 3 sata prije treninga (push se uključuje po uređaju, `/me/push-subscription`).
 
     # ---------------------------------------------------------------- members
     MemberSummary:
@@ -2581,19 +2706,25 @@ components:
     # ---------------------------------------------------------------- operations (e-mail queue)
     OutboxStatus:
       type: string
-      enum: [PENDING, SENT, FAILED]
+      enum: [PENDING, SENT, FAILED, SKIPPED]
       description: |
+        `SKIPPED` – nema aktivne push pretplate; obavijest ostaje u aplikaciji, nije poslana niti neuspjela.
         `PENDING` – u redu za slanje ili čeka ponovni pokušaj; `SENT` – **prihvaćeno od providera** (ne potvrda
         dostave); `FAILED` – trajna greška, iscrpljeni pokušaji, istekla ili povučena poruka.
     OutboxEventType:
       type: string
       enum: [INVITATION, REGISTRATION_CONFIRMED, REGISTRATION_CANCELLED, TRAINING_REMINDER, TRAINING_CANCELLED, TRAINING_RESCHEDULED, ATTENDANCE_RECORDED, PASSWORD_RESET]
+    OutboxChannel:
+      type: string
+      enum: [EMAIL, PUSH]
+      description: '`EMAIL` – e-mail na `recipientEmail`; `PUSH` – web push na sve pretplate primatelja (`acceptedByProviderAt` = prihvatio barem jedan push servis).'
     OutboxItem:
       type: object
-      required: [outboxId, eventType, status, recipientUserId, recipientEmail, trainingId, deduplicationKey, attemptCount, maxAttempts, createdAt, lastAttemptAt, nextAttemptAt, lastError, acceptedByProviderAt, providerMessageId, expiresAt, retryable]
+      required: [outboxId, eventType, channel, status, recipientUserId, recipientEmail, trainingId, deduplicationKey, attemptCount, maxAttempts, createdAt, lastAttemptAt, nextAttemptAt, lastError, acceptedByProviderAt, providerMessageId, expiresAt, retryable]
       properties:
         outboxId: { type: integer, format: int64 }
         eventType: { $ref: '#/components/schemas/OutboxEventType' }
+        channel: { $ref: '#/components/schemas/OutboxChannel' }
         status: { $ref: '#/components/schemas/OutboxStatus' }
         recipientUserId: { $ref: '#/components/schemas/UserId' }
         recipientEmail: { type: string, format: email }
@@ -2616,9 +2747,10 @@ components:
         checkedAt: { type: string, format: date-time }
         counts:
           type: object
-          required: [PENDING, SENT, FAILED]
+          required: [PENDING, SENT, FAILED, SKIPPED]
           properties:
             PENDING: { type: integer, minimum: 0 }
+            SKIPPED: { type: integer, minimum: 0 }
             SENT: { type: integer, minimum: 0 }
             FAILED: { type: integer, minimum: 0 }
         oldestPendingAgeSeconds: { type: [integer, 'null'], minimum: 0 }

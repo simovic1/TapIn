@@ -36,6 +36,11 @@ public class NotificationOutbox {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public EnqueueResult enqueue(OutboxMessage message) {
+        // Account access links require e-mail; all member notifications use push only.
+        if (message.eventType() != EmailEventType.INVITATION
+                && message.eventType() != EmailEventType.PASSWORD_RESET) {
+            message = message.viaPush(message.deduplicationKey());
+        }
         boolean inserted = repository.insertIfAbsent(message, clock.instant());
         if (!inserted) {
             log.debug("Outbox: duplicate event ignored, key={}", message.deduplicationKey());

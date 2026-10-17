@@ -43,7 +43,7 @@ describe('member management', () => {
     const fetch = mockApi({ 'GET /api/v1/me': () => json(200, makeUser(['MEMBER'])) });
     renderApp(path);
     expect(await screen.findByRole('heading', { name: 'Nemate pristup' })).toBeInTheDocument();
-    expect(fetch.mock.calls.every(([url]) => String(url).endsWith('/me'))).toBe(true);
+    expect(fetch.mock.calls.every(([url]) => (String(url).endsWith('/me') || String(url).endsWith('/me/notifications')))).toBe(true);
     expect(screen.queryByRole('link', { name: 'Članovi' })).not.toBeInTheDocument();
   });
 

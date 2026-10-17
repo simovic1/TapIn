@@ -1,8 +1,9 @@
 import type { NavIcon } from '../../app/navigation';
 
-type IconName = NavIcon | 'menu' | 'close' | 'logout' | 'alert' | 'inbox' | 'refresh';
+type IconName = NavIcon | 'menu' | 'close' | 'logout' | 'alert' | 'inbox' | 'refresh' | 'bell';
 
 const PATHS: Record<IconName, string> = {
+  bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4',
   home: 'M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z',
   calendar: 'M7 3v3m10-3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z',
   checklist: 'M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2',

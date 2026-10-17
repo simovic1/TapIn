@@ -48,7 +48,7 @@ describe('registration from the home screen', () => {
     expect(within(next).getByText('Niste prijavljeni')).toBeInTheDocument();
     await user.click(within(next).getByRole('button', { name: 'Prijavi se' }));
 
-    expect(await within(next).findByText('Prijavljeni ste. Potvrda je u redu za slanje e-mailom.')).toBeInTheDocument();
+    expect(await within(next).findByText('Prijavljeni ste. Potvrda je u obavijestima.')).toBeInTheDocument();
     expect(within(next).getByText('Prijavljeni ste')).toBeInTheDocument();
     expect(within(next).getByRole('button', { name: 'Otkaži prijavu' })).toBeInTheDocument();
     expect(within(next).queryByRole('button', { name: 'Prijavi se' })).not.toBeInTheDocument();

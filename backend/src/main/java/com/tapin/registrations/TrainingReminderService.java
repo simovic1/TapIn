@@ -32,6 +32,7 @@ import java.util.Set;
  *       A reminder still undelivered when the training starts expires in the outbox (FAILED, not sent).</li>
  *   <li>One reminder per member and session: the deduplication key does not contain the time, so restarts, several
  *       workers and moving the session never produce a second one.</li>
+ *   <li>Reminders are stored in the inbox and sent by push; the profile preference controls both.</li>
  * </ul>
  */
 @Service
@@ -49,7 +50,8 @@ public class TrainingReminderService {
 
     TrainingReminderService(ReminderProperties properties, TrainingService trainings,
                             RegistrationRepository registrations, MembershipDirectory directory,
-                            UserAccountService users, NotificationOutbox outbox, Clock clock) {
+                            UserAccountService users, NotificationOutbox outbox,
+                            Clock clock) {
         this.properties = properties;
         this.trainings = trainings;
         this.registrations = registrations;
@@ -74,19 +76,20 @@ public class TrainingReminderService {
                 continue;
             }
             Map<Long, MemberRef> members = directory.findAll(registered);
-            Set<Long> wanting = users.withTrainingReminders(members.values().stream().map(MemberRef::userId).toList());
+            List<Long> userIds = members.values().stream().map(MemberRef::userId).toList();
+            Set<Long> wantingReminders = users.withTrainingReminders(userIds);
             for (MemberRef member : members.values()) {
-                if (!wanting.contains(member.userId())) {
+                if (!wantingReminders.contains(member.userId())) {
                     continue;
                 }
                 Map<String, Object> payload = new HashMap<>(session.emailValues());
                 payload.put("firstName", member.firstName());
-                EnqueueResult result = outbox.enqueue(OutboxMessage.of(EmailEventType.TRAINING_REMINDER,
-                                member.userId(), member.email(), payload,
-                                "TRAINING_REMINDER:session-" + session.trainingId() + ":membership-" + member.membershipId())
+                String key = "TRAINING_REMINDER:session-" + session.trainingId() + ":membership-" + member.membershipId();
+                OutboxMessage reminder = OutboxMessage.of(EmailEventType.TRAINING_REMINDER, member.userId(),
+                                member.email(), payload, key)
                         .forSession(session.trainingId())
-                        .expiresAt(session.startAt()));
-                if (result == EnqueueResult.QUEUED) {
+                        .expiresAt(session.startAt());
+                if (outbox.enqueue(reminder) == EnqueueResult.QUEUED) {
                     queued++;
                 }
             }

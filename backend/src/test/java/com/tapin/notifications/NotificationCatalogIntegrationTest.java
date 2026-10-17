@@ -69,6 +69,8 @@ class NotificationCatalogIntegrationTest {
     @Autowired MutableClock clock;
     @Autowired OutboxProcessor processor;
     @Autowired EmailSender sender;
+    @Autowired PushTemplateRenderer pushRenderer;
+    @MockitoBean PushDelivery pushDelivery;
     @Autowired com.tapin.registrations.TrainingReminderService reminders;
 
     ScriptedEmailSender recorder;
@@ -86,6 +88,15 @@ class NotificationCatalogIntegrationTest {
         clock.set(Instant.parse("2026-10-16T10:00:00Z"));
         recorder = (ScriptedEmailSender) sender;
         recorder.reset();
+        org.mockito.Mockito.when(pushDelivery.deliver(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> {
+                    OutboxEntry entry = invocation.getArgument(0);
+                    var rendered = json.readTree(pushRenderer.render(entry.eventType(), entry.sessionId(), entry.payload()));
+                    // Record push text in the shared assertion DTO; the SMTP sender must never receive this row.
+                    recorder.sent.add(new EmailMessage(entry.recipientEmail(), rendered.get("title").asString(),
+                            rendered.get("body").asString() + " " + rendered.get("url").asString(), "push", entry.deduplicationKey()));
+                    return new com.tapin.notifications.email.SendResult.Accepted("push-test");
+                });
         users = new TestUsers(jdbc, passwordEncoder);
         ana = member("ana@klub.hr", "Ana");
         ivo = member("ivo@klub.hr", "Ivo");
@@ -118,9 +129,9 @@ class NotificationCatalogIntegrationTest {
 
         List<EmailMessage> mails = deliver();
         assertThat(mails).extracting(EmailMessage::to).containsOnly("ana@klub.hr");
-        assertThat(mails.get(0).subject()).isEqualTo("Prijava zaprimljena: Open mat, utorak 20. 10. 2026. u 18:30");
-        assertThat(mails.get(0).textBody()).contains("Bok Ana").contains("Prijava nije potvrda dolaska")
-                .contains("https://tapin.test/treninzi/" + tuesday);
+        assertThat(mails.get(0).subject()).isEqualTo("Prijava zaprimljena: Open mat");
+        assertThat(mails.get(0).textBody()).contains("Prijava nije potvrda dolaska")
+                .contains("/treninzi/" + tuesday);
         assertThat(mails.get(1).subject()).startsWith("Otkazali ste prijavu: Open mat");
         assertThat(mails.get(1).textBody()).contains("Trening se i dalje održava");
     }
@@ -138,15 +149,15 @@ class NotificationCatalogIntegrationTest {
                 .content("{\"expectedVersion\":0,\"startAt\":\"2026-10-21T17:00:00Z\",\"endAt\":\"2026-10-21T18:30:00Z\"}"));
         List<EmailMessage> moved = deliver();
         assertThat(moved).extracting(EmailMessage::to).containsExactly("ana@klub.hr");
-        assertThat(moved.get(0).subject()).isEqualTo("Promijenjen termin: Open mat, sada srijeda 21. 10. 2026. u 19:00");
-        assertThat(moved.get(0).textBody()).contains("s utorak 20. 10. 2026. u 18:30 na srijeda 21. 10. 2026. u 19:00");
+        assertThat(moved.get(0).subject()).isEqualTo("Promijenjen termin: Open mat");
+        assertThat(moved.get(0).textBody()).contains("S utorak 20. 10. 2026. u 18:30 na srijeda 21. 10. 2026. u 19:00");
 
         call(trainer, post("/api/v1/trainings/" + tuesday + "/cancel").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"expectedVersion\":1,\"reason\":\"Dvorana je zatvorena\"}"));
         List<EmailMessage> cancelled = deliver();
         assertThat(cancelled).extracting(EmailMessage::to).containsExactly("ana@klub.hr");
-        assertThat(cancelled.get(0).subject()).isEqualTo("Trening je otkazan: Open mat, srijeda 21. 10. 2026. u 19:00");
-        assertThat(cancelled.get(0).textBody()).contains("trener je otkazao trening").contains("Razlog: Dvorana je zatvorena")
+        assertThat(cancelled.get(0).subject()).isEqualTo("Trening je otkazan: Open mat");
+        assertThat(cancelled.get(0).textBody()).contains("Razlog: Dvorana je zatvorena")
                 .doesNotContain("Otkazali ste prijavu");
     }
 
@@ -159,9 +170,9 @@ class NotificationCatalogIntegrationTest {
 
         List<EmailMessage> mails = deliver();
         assertThat(mails).extracting(EmailMessage::to).containsExactly("ana@klub.hr", "ana@klub.hr");
-        assertThat(mails.get(0).subject()).isEqualTo("Evidencija dolaska: Trening, utorak 15. 9. 2026. u 18:30");
-        assertThat(mails.get(0).textBody()).contains("evidentirano je: dolazak (prisutni)")
-                .contains("https://tapin.test/treninzi/" + past);
+        assertThat(mails.get(0).subject()).isEqualTo("Evidencija dolaska: Trening");
+        assertThat(mails.get(0).textBody()).contains("dolazak (prisutni)")
+                .contains("/treninzi/" + past);
         assertThat(mails.get(1).textBody()).contains("izostanak (odsutni)");
     }
 
@@ -197,9 +208,8 @@ class NotificationCatalogIntegrationTest {
         assertThat(reminders.enqueueDue()).isEqualTo(1);
         List<EmailMessage> mails = deliver();
         assertThat(mails).extracting(EmailMessage::to).containsExactly("ana@klub.hr");
-        assertThat(mails.get(0).subject()).isEqualTo("Podsjetnik: Open mat, utorak 20. 10. 2026. u 18:30");
-        assertThat(mails.get(0).textBody()).contains("otkažite prijavu: https://tapin.test/treninzi/" + tuesday)
-                .contains("isključiti u postavkama profila");
+        assertThat(mails.get(0).subject()).isEqualTo("Podsjetnik: Open mat");
+        assertThat(mails.get(0).textBody()).contains("otkažite prijavu.").contains("/treninzi/" + tuesday);
 
         // D-04: a reminder that could not be delivered before the start is stale and is never sent.
         long thursday = session("2026-10-22T16:30:00Z", "SCHEDULED", null);

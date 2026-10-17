@@ -7,6 +7,7 @@ import { Icon } from '../ui/Icon';
 import { BeltMark } from './BeltMark';
 import { DragonSymbol } from './DragonSymbol';
 import { MoreMenu } from './MoreMenu';
+import { NotificationBell } from './NotificationBell';
 
 /** On the ink header the active page wears a crimson tape, like the rank bar of the mark. */
 const desktopLink = ({ isActive }: { isActive: boolean }) =>
@@ -85,6 +86,7 @@ export function AppLayout() {
                 {user.roles.map((role) => ROLE_LABELS[role]).join(' · ')}
               </p>
             </div>
+            <NotificationBell />
             <button
               type="button"
               onClick={onLogout}

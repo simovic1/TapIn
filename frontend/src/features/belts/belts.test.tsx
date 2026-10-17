@@ -65,7 +65,7 @@ describe('own profile', () => {
     });
     renderApp('/profil');
     const user = userEvent.setup();
-    const toggle = await screen.findByRole('checkbox', { name: /Podsjetnik e-mailom 3 sata prije treninga/ });
+    const toggle = await screen.findByRole('checkbox', { name: /Podsjetnik u aplikaciji i putem pusha 3 sata prije treninga/ });
     expect(toggle).toBeChecked();
 
     await user.click(toggle);

@@ -27,7 +27,7 @@ class OutboxOperations {
                  String latestError) {
     }
 
-    record Item(long outboxId, EmailEventType eventType, OutboxStatus status, long recipientUserId,
+    record Item(long outboxId, EmailEventType eventType, OutboxChannel channel, OutboxStatus status, long recipientUserId,
                 String recipientEmail, Long trainingId, String deduplicationKey, int attemptCount, int maxAttempts,
                 Instant createdAt, Instant lastAttemptAt, Instant nextAttemptAt, String lastError,
                 Instant acceptedByProviderAt, String providerMessageId, Instant expiresAt, boolean retryable) {
@@ -96,7 +96,7 @@ class OutboxOperations {
     }
 
     private Item item(OperatorRow row) {
-        return new Item(row.id(), row.eventType(), row.status(), row.recipientUserId(), row.recipientEmail(),
+        return new Item(row.id(), row.eventType(), row.channel(), row.status(), row.recipientUserId(), row.recipientEmail(),
                 row.sessionId(), row.deduplicationKey(), row.attemptCount(), properties.maxAttempts(),
                 row.createdAt(), row.lastAttemptAt(), row.nextAttemptAt(), row.lastError(), row.sentAt(),
                 row.providerMessageId(), row.expiresAt(), row.retryable());

@@ -40,9 +40,9 @@ class OutboxRepository {
         int inserted = jdbc.update("""
                 INSERT INTO email_outbox (event_type, recipient_user_id, recipient_email, session_id, payload,
                                           redact_payload_after_send, deduplication_key, next_attempt_at,
-                                          created_at, updated_at, expires_at)
+                                          created_at, updated_at, expires_at, channel)
                 VALUES (:eventType, :recipientUserId, :recipientEmail, :sessionId, CAST(:payload AS jsonb),
-                        :redact, :deduplicationKey, :now, :now, :now, :expiresAt)
+                        :redact, :deduplicationKey, :now, :now, :now, :expiresAt, :channel)
                 ON CONFLICT (deduplication_key) DO NOTHING
                 """, new MapSqlParameterSource()
                 .addValue("eventType", message.eventType().name())
@@ -53,6 +53,7 @@ class OutboxRepository {
                 .addValue("redact", message.containsSecret())
                 .addValue("deduplicationKey", message.deduplicationKey())
                 .addValue("expiresAt", message.expiresAt() == null ? null : ts(message.expiresAt()))
+                .addValue("channel", message.channel().name())
                 .addValue("now", ts(now)));
         return inserted == 1;
     }
@@ -105,6 +106,14 @@ class OutboxRepository {
                 """, params(id, workerId, now)
                 .addValue("nextAttemptAt", ts(nextAttemptAt))
                 .addValue("error", OutboxErrors.sanitize(error))) == 1;
+    }
+
+    boolean markSkipped(long id, String workerId, Instant now) {
+        return jdbc.update("""
+                UPDATE email_outbox
+                SET status = 'SKIPPED', last_error = NULL, locked_by = NULL, locked_until = NULL, updated_at = :now
+                WHERE id = :id AND locked_by = :workerId AND status = 'PENDING'
+                """, params(id, workerId, now)) == 1;
     }
 
     boolean markFailed(long id, String workerId, Instant now, String error) {
@@ -166,7 +175,8 @@ class OutboxRepository {
                 rs.getString("locked_by"),
                 instant(rs, "locked_until"),
                 instant(rs, "sent_at"),
-                instant(rs, "expires_at"));
+                instant(rs, "expires_at"),
+                OutboxChannel.valueOf(rs.getString("channel")));
     }
 
     private static MapSqlParameterSource params(long id, String workerId, Instant now) {
@@ -195,7 +205,7 @@ class OutboxRepository {
     // ------------------------------------------------------------------ operator view (BJJ-30)
 
     /** A row as an operator may see it: no payload (it can hold invitation/reset links), sanitized error. */
-    record OperatorRow(long id, EmailEventType eventType, OutboxStatus status, long recipientUserId,
+    record OperatorRow(long id, EmailEventType eventType, OutboxChannel channel, OutboxStatus status, long recipientUserId,
                        String recipientEmail, Long sessionId, String deduplicationKey, int attemptCount,
                        Instant createdAt, Instant lastAttemptAt, Instant nextAttemptAt, String lastError,
                        Instant sentAt, String providerMessageId, Instant expiresAt, boolean retryable) {
@@ -203,7 +213,7 @@ class OutboxRepository {
 
     List<OperatorRow> findForOperator(Optional<OutboxStatus> status, int page, int size, Instant now) {
         return jdbc.query("""
-                SELECT id, event_type, status, recipient_user_id, recipient_email, session_id, deduplication_key,
+                SELECT id, event_type, channel, status, recipient_user_id, recipient_email, session_id, deduplication_key,
                        attempt_count, created_at, last_attempt_at, next_attempt_at, last_error, sent_at,
                        provider_message_id, expires_at,
                        (status = 'FAILED' AND NOT redact_payload_after_send
@@ -215,7 +225,8 @@ class OutboxRepository {
                 """, new MapSqlParameterSource("status", status.map(Enum::name).orElse(null))
                 .addValue("size", size).addValue("offset", (long) page * size).addValue("now", ts(now)), (rs, n) -> {
             OutboxStatus rowStatus = OutboxStatus.valueOf(rs.getString("status"));
-            return new OperatorRow(rs.getLong("id"), EmailEventType.valueOf(rs.getString("event_type")), rowStatus,
+            return new OperatorRow(rs.getLong("id"), EmailEventType.valueOf(rs.getString("event_type")),
+                    OutboxChannel.valueOf(rs.getString("channel")), rowStatus,
                     rs.getLong("recipient_user_id"), rs.getString("recipient_email"),
                     rs.getObject("session_id", Long.class), rs.getString("deduplication_key"),
                     rs.getInt("attempt_count"), instant(rs, "created_at"), instant(rs, "last_attempt_at"),

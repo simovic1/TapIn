@@ -33,12 +33,14 @@ class OutboxProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxProcessor.class);
 
-    record BatchResult(int claimed, int sent, int retried, int failed) {
+    record BatchResult(int claimed, int sent, int retried, int failed, int skipped) {
     }
 
     private final OutboxRepository repository;
     private final EmailSender sender;
     private final EmailTemplateRenderer renderer;
+    /** Null in focused tests that only exercise e-mail; PUSH rows then fail permanently. */
+    private final PushDelivery pushDelivery;
     private final OutboxProperties properties;
     private final RetryPolicy retryPolicy;
     private final Clock clock;
@@ -47,20 +49,22 @@ class OutboxProcessor {
 
     @Autowired
     OutboxProcessor(OutboxRepository repository, EmailSender sender, EmailTemplateRenderer renderer,
-                    OutboxProperties properties, Clock clock, MeterRegistry meters) {
-        this(repository, sender, renderer, properties, clock, defaultWorkerId(), meters);
+                    PushDelivery pushDelivery, OutboxProperties properties, Clock clock, MeterRegistry meters) {
+        this(repository, sender, renderer, pushDelivery, properties, clock, defaultWorkerId(), meters);
     }
 
     OutboxProcessor(OutboxRepository repository, EmailSender sender, EmailTemplateRenderer renderer,
                     OutboxProperties properties, Clock clock, String workerId) {
-        this(repository, sender, renderer, properties, clock, workerId, new SimpleMeterRegistry());
+        this(repository, sender, renderer, null, properties, clock, workerId, new SimpleMeterRegistry());
     }
 
     private OutboxProcessor(OutboxRepository repository, EmailSender sender, EmailTemplateRenderer renderer,
-                            OutboxProperties properties, Clock clock, String workerId, MeterRegistry meters) {
+                            PushDelivery pushDelivery, OutboxProperties properties, Clock clock, String workerId,
+                            MeterRegistry meters) {
         this.repository = repository;
         this.sender = sender;
         this.renderer = renderer;
+        this.pushDelivery = pushDelivery;
         this.properties = properties;
         this.retryPolicy = new RetryPolicy(properties, () -> ThreadLocalRandom.current().nextDouble());
         this.clock = clock;
@@ -83,6 +87,7 @@ class OutboxProcessor {
         int sent = 0;
         int retried = 0;
         int failed = 0;
+        int skipped = 0;
         for (OutboxEntry entry : claimed) {
             Outcome outcome = deliver(entry, now);
             outcomes.get(outcome).increment();
@@ -90,17 +95,18 @@ class OutboxProcessor {
                 case SENT -> sent++;
                 case RETRY -> retried++;
                 case FAILED -> failed++;
+                case SKIPPED -> skipped++;
                 case LEASE_LOST -> { }
             }
         }
         if (!claimed.isEmpty()) {
-            log.info("Outbox batch by {}: claimed={} sent={} retried={} failed={}", workerId, claimed.size(), sent,
-                    retried, failed);
+            log.info("Outbox batch by {}: claimed={} sent={} retried={} failed={} skipped={}", workerId, claimed.size(), sent,
+                    retried, failed, skipped);
         }
-        return new BatchResult(claimed.size(), sent, retried, failed);
+        return new BatchResult(claimed.size(), sent, retried, failed, skipped);
     }
 
-    private enum Outcome { SENT, RETRY, FAILED, LEASE_LOST }
+    private enum Outcome { SENT, RETRY, FAILED, SKIPPED, LEASE_LOST }
 
     private Outcome deliver(OutboxEntry entry, Instant now) {
         if (entry.expiresAt() != null && !now.isBefore(entry.expiresAt())) {
@@ -112,9 +118,7 @@ class OutboxProcessor {
         }
         SendResult result;
         try {
-            EmailTemplateRenderer.Rendered rendered = renderer.render(entry.eventType(), entry.payload());
-            result = sender.send(new EmailMessage(entry.recipientEmail(), rendered.subject(), rendered.body(),
-                    messageId(entry), entry.deduplicationKey()));
+            result = entry.channel() == OutboxChannel.PUSH ? deliverPush(entry, now) : deliverEmail(entry);
         } catch (IllegalArgumentException e) {
             result = new SendResult.PermanentFailure("Cannot render message: " + e.getMessage());
         } catch (RuntimeException e) {
@@ -129,13 +133,19 @@ class OutboxProcessor {
                 recorded = repository.markSent(entry.id(), workerId, now, accepted.providerMessageId());
                 outcome = Outcome.SENT;
             }
+            case SendResult.Skipped skipped -> {
+                recorded = repository.markSkipped(entry.id(), workerId, now);
+                outcome = Outcome.SKIPPED;
+                log.debug("Outbox id={} {} push skipped: {}", entry.id(), entry.eventType(), skipped.reason());
+            }
             case SendResult.PermanentFailure permanent -> {
                 recorded = repository.markFailed(entry.id(), workerId, now, permanent.reason());
                 outcome = Outcome.FAILED;
                 log.warn("Outbox id={} {} FAILED permanently: {}", entry.id(), entry.eventType(), permanent.reason());
             }
             case SendResult.TransientFailure transientFailure -> {
-                String error = "[" + sender.name() + (transientFailure.ambiguous() ? ", ambiguous" : "") + "] "
+                String channelName = entry.channel() == OutboxChannel.PUSH ? "push" : sender.name();
+                String error = "[" + channelName + (transientFailure.ambiguous() ? ", ambiguous" : "") + "] "
                         + transientFailure.reason();
                 if (retryPolicy.isExhausted(entry.attemptCount())) {
                     recorded = repository.markFailed(entry.id(), workerId, now,
@@ -158,6 +168,19 @@ class OutboxProcessor {
             return Outcome.LEASE_LOST;
         }
         return outcome;
+    }
+
+    private SendResult deliverEmail(OutboxEntry entry) {
+        EmailTemplateRenderer.Rendered rendered = renderer.render(entry.eventType(), entry.payload());
+        return sender.send(new EmailMessage(entry.recipientEmail(), rendered.subject(), rendered.body(),
+                messageId(entry), entry.deduplicationKey()));
+    }
+
+    private SendResult deliverPush(OutboxEntry entry, Instant now) {
+        if (pushDelivery == null) {
+            return new SendResult.PermanentFailure("Push delivery is not available");
+        }
+        return pushDelivery.deliver(entry, now);
     }
 
     /** Stable across attempts of the same row, unique per row. */

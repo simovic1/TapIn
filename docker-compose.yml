@@ -65,6 +65,10 @@ services:
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@tapin.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-local-dev-admin-password}
+      # Web push (optional): empty = inbox only. Keys from `node scripts/generate-vapid-keys.mjs` in .env.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:no-reply@tapin.local}
       # true when served through the HTTPS proxy below (as in production)
       SERVER_SERVLET_SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
     ports:
