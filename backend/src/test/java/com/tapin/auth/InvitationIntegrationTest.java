@@ -95,14 +95,14 @@ class InvitationIntegrationTest {
         Map<String, Object> payload = invitationPayload(userId);
         OutboxTestSupport.RenderedEmail email = OutboxTestSupport.render(context, "INVITATION", payload);
         assertThat(email.body()).contains("https://tapin.test/pozivnica#" + token).contains("Bok Nova");
-        assertThat(email.subject()).isEqualTo("Pozivnica u BJJ klub");
+        assertThat(email.subject()).isEqualTo("Pozivnica u Test klub");
 
         // Preview for the activation page (anonymous).
         mvc.perform(post("/api/v1/auth/invitations/preview").with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"token\":\"" + token + "\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("Nova.Clanica@Klub.hr"))
-                .andExpect(jsonPath("$.clubName").value("BJJ klub"));
+                .andExpect(jsonPath("$.clubName").value("Test klub"));
         Instant expiresAt = Instant.parse(created.get("expiresAt").asString());
         assertThat(Duration.between(Instant.now(), expiresAt)).isBetween(Duration.ofDays(7).minusMinutes(1), Duration.ofDays(7));
 
