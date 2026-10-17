@@ -24,4 +24,13 @@ class MailProviderConfig {
     EmailSender loggingEmailSender() {
         return new LoggingEmailSender();
     }
+    @Bean
+    @ConditionalOnMissingBean(EmailSender.class)
+    @ConditionalOnProperty(name = "tapin.mail.provider", havingValue = "gmail")
+    EmailSender gmailEmailSender(@Value("${tapin.mail.from}") String from,
+            @Value("${GMAIL_CLIENT_ID}") String clientId,
+            @Value("${GMAIL_CLIENT_SECRET}") String clientSecret,
+            @Value("${GMAIL_REFRESH_TOKEN}") String refreshToken) {
+        return new GmailEmailSender(from, clientId, clientSecret, refreshToken);
+    }
 }

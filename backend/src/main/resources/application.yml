@@ -70,7 +70,7 @@ tapin:
     time-zone: Europe/Zagreb
   mail:
     from: ${MAIL_FROM}
-    # smtp (any SMTP relay / provider SMTP endpoint; Mailpit locally) or log (substitute provider, logs only)
+    # smtp (Mailpit locally), gmail (HTTPS OAuth; GMAIL_CLIENT_ID/SECRET/REFRESH_TOKEN), or log (no delivery)
     provider: ${MAIL_PROVIDER:smtp}
   schedule:
     # Sessions are materialised from weekly rules this many days ahead (spec §4.2).
